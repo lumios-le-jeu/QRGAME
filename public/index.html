@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QRSHOT - Battle Arena</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap"
+        rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Aruco Libs -->
+    <script src="js/lib/cv.js"></script>
+    <script src="js/lib/aruco.js"></script>
+    <script src="js/lib/svd.js"></script>
+</head>
+
+<body>
+
+    <!-- PAGE: ACCUEIL -->
+    <section id="page-home" class="screen active">
+        <div class="glass-panel">
+            <h1 class="glitch-text">QRSHOT</h1>
+            <p class="subtitle">TACTICAL AR BATTLE</p>
+
+            <div class="menu-actions">
+                <button id="btn-goto-join" class="btn primary">REJOINDRE</button>
+                <button id="btn-goto-create" class="btn secondary">CRÉER PARTIE</button>
+            </div>
+
+            <div id="lobbies-list">
+                <h3>PARTIES À PROXIMITÉ</h3>
+                <div class="lobby-item">
+                    <span>Parc de la Citadelle</span>
+                    <span class="status">EN COURS</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE: REJOINDRE -->
+    <section id="page-join" class="screen hidden">
+        <div class="glass-panel">
+            <h2>REJOINDRE</h2>
+            <div class="form-group">
+                <label>CODE D'ACCÈS</label>
+                <input type="text" id="join-code" placeholder="XXXX" maxlength="4">
+            </div>
+            <div class="form-group">
+                <label>PSEUDO</label>
+                <input type="text" id="join-pseudo" placeholder="Soldier76">
+            </div>
+            <div class="form-group">
+                <label>ÉQUIPE</label>
+                <select id="join-team"
+                    style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--neon-cyan); color: #fff; padding: 10px; font-family: var(--font-main); font-size: 1.2rem; border-radius: 4px; text-align: center;">
+                    <option value="auto">AUTOMATIQUE</option>
+                    <option value="red">ROUGE</option>
+                    <option value="blue">BLEU</option>
+                </select>
+            </div>
+            <div class="menu-actions">
+                <button id="btn-confirm-join" class="btn primary">GO</button>
+                <button id="btn-back-home-1" class="btn secondary">RETOUR</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE: CRÉER (ADMIN) -->
+    <section id="page-create" class="screen hidden">
+        <div class="glass-panel">
+            <h2>NOUVELLE MISSION</h2>
+            <div class="form-group">
+                <label>NOM DE PARTIE</label>
+                <input type="text" id="create-name" value="Mission Alpha">
+            </div>
+            <div class="form-group">
+                <label>NOMBRE D'ÉQUIPES</label>
+                <input type="number" id="create-teams" value="2" min="2" max="4">
+            </div>
+            <div class="form-group">
+                <label>DURÉE (Minutes)</label>
+                <input type="number" id="create-duration" value="15" min="1" max="60">
+            </div>
+            <div class="menu-actions">
+                <button id="btn-confirm-create" class="btn primary">LANCER</button>
+                <button id="btn-back-home-2" class="btn secondary">RETOUR</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE: JEU (HUD) -->
+    <section id="page-game" class="screen hidden">
+        <!-- BACKGROUND CAMERA -->
+        <video id="camera-feed" autoplay playsinline muted></video>
+        <canvas id="camera-canvas" hidden></canvas> <!-- For processing QR -->
+
+        <!-- HUD LAYER -->
+        <div class="hud-overlay">
+
+            <!-- TOP LEFT: MINIMAP -->
+            <div class="hud-item minimap-container">
+                <div class="minimap">
+                    <!-- Placeholder map points -->
+                    <div class="map-point zone-a">A</div>
+                    <div class="map-point zone-b">B</div>
+                    <div class="map-point player-pos"></div>
+                </div>
+            </div>
+
+            <!-- TOP RIGHT: SCORE -->
+            <div class="hud-item score-board">
+                <div class="score-row red">
+                    <span class="team-label">RED</span>
+                    <span class="score-val" id="score-red">0</span>
+                </div>
+                <div class="score-row blue">
+                    <span class="team-label">BLUE</span>
+                    <span class="score-val" id="score-blue">0</span>
+                </div>
+            </div>
+
+            <!-- CENTER: RETICLE -->
+            <div class="center-reticle">
+                <div class="reticle-circle"></div>
+                <div class="reticle-crosshair"></div>
+                <div class="scan-label">SYSTEM READY</div>
+                <div id="feedback-msg" class="feedback-msg hidden">-10 PTS</div>
+            </div>
+
+            <!-- BOTTOM LEFT: AMMO -->
+            <div class="hud-item ammo-display">
+                <span class="label">AMMO</span>
+                <span class="value">6/6</span>
+            </div>
+
+            <!-- BOTTOM CENTER: FIRE BUTTON -->
+            <button id="btn-fire" class="fire-btn">
+                <div class="inner-circle"></div>
+            </button>
+
+            <!-- BOTTOM RIGHT: TEAM -->
+            <div class="hud-item team-display">
+                <span class="label">TEAM</span>
+                <span class="value" id="my-team">-</span>
+                <span id="my-id-display" style="display:block; font-size: 0.9em; margin-top: 5px; color: #aaa;">ID:
+                    -</span>
+            </div>
+
+        </div>
+    </section>
+
+    <script src="js/client.js"></script>
+</body>
+
+</html>

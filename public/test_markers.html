@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Aruco Markers Generator</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #eee;
+            padding: 20px;
+        }
+
+        .grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .card {
+            bg: white;
+            padding: 10px;
+            border: 1px solid #ccc;
+            text-align: center;
+            background: white;
+        }
+
+        canvas {
+            border: 1px solid black;
+        }
+
+        h3 {
+            margin: 5px 0;
+        }
+    </style>
+    <script src="js/lib/cv.js"></script>
+    <script src="js/lib/aruco.js"></script>
+    <script src="js/lib/svd.js"></script>
+</head>
+
+<body>
+    <h1>Generation Marqueurs Aruco (Test)</h1>
+
+    <div style="margin-bottom: 20px;">
+        <h2>COMMANDES</h2>
+        <div class="grid" id="cmds"></div>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <h2>EQUIPE ROUGE (1-10)</h2>
+        <div class="grid" id="red"></div>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <h2>EQUIPE BLEUE (50-60)</h2>
+        <div class="grid" id="blue"></div>
+    </div>
+
+    <script type="module">
+        import { arucoToSVGString } from './js/lib/aruco-marker.js';
+
+        // Helper to add marker
+        function addMarker(id, containerId, label) {
+            // ArucoMarker(id, dictionary? default is 4x4_1000 usually)
+            // js-aruco detection expects "Original" dictionary (5x5) usually.
+            // If detection fails, we might need another generator.
+            // But let's verify if ArucoMarker supports 'Original'.
+            // The lib parameter is just 'id'.
+            // Let's assume standard behavior first.
+
+            // Updated to use the correct named export
+            const svg = arucoToSVGString(id, '150px');
+
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `<h3>${label || 'ID ' + id}</h3><div style="margin:10px">${svg}</div><p>ID: ${id}</p>`;
+            document.getElementById(containerId).appendChild(div);
+        }
+
+        // RELOAD (ID 0)
+        addMarker(0, 'cmds', 'RELOAD (0)');
+
+        // RED (1-4)
+        for (let i = 1; i <= 4; i++) {
+            addMarker(i, 'red', `Rouge ${i}`);
+        }
+
+        // BLUE (50-53)
+        for (let i = 50; i <= 53; i++) {
+            addMarker(i, 'blue', `Bleu ${i}`);
+        }
+
+        // ADMIN (256)
+        addMarker(256, 'cmds', 'ADMIN (256)');
+
+        // ZONES (200-204)
+        for (let i = 200; i <= 204; i++) {
+            addMarker(i, 'cmds', `ZONE ${i}`);
+        }
+    </script>
+</body>
+
+</html>
