@@ -46,8 +46,20 @@ document.getElementById('btn-goto-create').addEventListener('click', () => {
 document.getElementById('btn-back-home-1').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-back-home-2').addEventListener('click', () => showScreen('home'));
 
+// GPS Helper
+const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error("Combinaison GPS incompatible ou refusée"));
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            (err) => reject(err),
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    });
+};
+
 // CONFIRM JOIN
-document.getElementById('btn-confirm-join').addEventListener('click', () => {
+document.getElementById('btn-confirm-join').addEventListener('click', async () => {
     const code = document.getElementById('join-code').value.toUpperCase();
     const pseudo = document.getElementById('join-pseudo').value || 'Soldier';
     const team = document.getElementById('join-team').value;
@@ -56,24 +68,47 @@ document.getElementById('btn-confirm-join').addEventListener('click', () => {
         alert("Code invalide (4 caractères)");
         return;
     }
-    // TODO: Verify code with server before entering
-    enterGame(pseudo, team, code);
+
+    try {
+        const coords = await getCurrentLocation();
+        enterGame(pseudo, team, code, coords);
+    } catch (err) {
+        console.error(err);
+        alert("GPS REQUIS : Donnez l'accès à la localisation pour rejoindre.");
+        // Dev fallback for testing if GPS fails on non-https
+        // enterGame(pseudo, team, code, {lat: 0, lon: 0}); 
+    }
 });
 
 // CONFIRM CREATE
-document.getElementById('btn-confirm-create').addEventListener('click', () => {
+document.getElementById('btn-confirm-create').addEventListener('click', async () => {
     const name = document.getElementById('create-name').value;
     const teams = document.getElementById('create-teams').value;
     const duration = document.getElementById('create-duration').value;
 
-    // Admin creates game
-    socket.emit('createGame', { name, teams, duration }, (response) => {
-        if (response.success) {
-            alert("Partie créée ! Code: " + response.gameCode);
-            // Creator joins as Player 1 (Red), NOT Admin (256) unless specified
-            enterGame('Commander', 'red', response.gameCode);
-        }
-    });
+    try {
+        alert("Acquisition position GPS...");
+        const coords = await getCurrentLocation();
+        const isPlayer = document.getElementById('create-is-player').checked;
+
+        // Admin creates game
+        socket.emit('createGame', { name, teams, duration, lat: coords.lat, lon: coords.lon }, (response) => {
+            if (response.success) {
+                alert("Partie créée ! Code: " + response.gameCode);
+
+                if (isPlayer) {
+                    // Creator joins as Player 1 (Red)
+                    enterGame('Commander', 'red', response.gameCode, coords);
+                } else {
+                    // Creator joins as Spectator (Admin)
+                    enterGame('Admin', 'spectator', response.gameCode, coords);
+                }
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        alert("ERREUR GPS : Impossible de créer la partie sans localisation.\nVérifiez vos permissions.");
+    }
 });
 
 let redScore = 0;
@@ -82,11 +117,11 @@ let redZones = 0;
 let blueZones = 0;
 
 function updateScoreBoard() {
-    document.getElementById('score-red').innerHTML = `ROUGE: ${redScore} <br> <small>🚩 ${redZones}</small>`;
-    document.getElementById('score-blue').innerHTML = `BLEU: ${blueScore} <br> <small>🚩 ${blueZones}</small>`;
+    document.getElementById('score-red').innerHTML = `&nbsp;${redScore} <br> <small>🚩 ${redZones}</small>`;
+    document.getElementById('score-blue').innerHTML = `&nbsp;${blueScore} <br> <small>🚩 ${blueZones}</small>`;
 }
 
-function enterGame(username, team, gameCode) {
+function enterGame(username, team, gameCode, coords) {
     showScreen('game');
 
     startCamera();
@@ -96,7 +131,9 @@ function enterGame(username, team, gameCode) {
     socket.emit('joinGame', {
         username: username,
         team: team, // 'red', 'blue', or 'auto'
-        gameCode: gameCode
+        gameCode: gameCode,
+        lat: coords ? coords.lat : 0,
+        lon: coords ? coords.lon : 0
     });
 
     // We wait for server to confirm team via 'assignedId' or 'playerList' before updateTeamDisplay
@@ -110,7 +147,11 @@ let detector = null;
 async function startCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" } // Rear camera
+            video: {
+                facingMode: "environment",
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
         });
         video.srcObject = stream;
         video.setAttribute("playsinline", true);
@@ -121,6 +162,7 @@ async function startCamera() {
         if (typeof AR !== 'undefined') {
             detector = new AR.Detector();
             console.log("Aruco Detector Ready");
+            requestAnimationFrame(aimLoop); // Start aiming loop
         } else {
             console.error("AR Lib not loaded");
         }
@@ -130,35 +172,65 @@ async function startCamera() {
     }
 }
 
-function scanFrame() {
-    if (!isCameraReady || !detector) return;
+// CONTINUOUS AIMING (For feedback & lock)
+function aimLoop() {
+    if (!isCameraReady || !detector) {
+        requestAnimationFrame(aimLoop);
+        return;
+    }
 
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.height = video.videoHeight;
-        canvas.width = video.videoWidth;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Sync canvas to video prop
+        if (canvas.width !== video.videoWidth) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        }
 
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // ARUCO DETECTION
-        const markers = detector.detect(imageData);
+        try {
+            const markers = detector.detect(imageData);
 
-        if (markers && markers.length > 0) {
-            // Take the largest marker or closest to center?
-            // Simple: Take the first one found
-            handleHit(markers[0].id);
-        } else {
-            // Miss handling
-            if (ammo > 0) {
-                ammo--;
-                updateAmmoDisplay();
-                showFeedback("MISS", "#fff");
+            // Visual feedback
+            const reticle = document.querySelector('.reticle-circle');
+            const scanLabel = document.querySelector('.scan-label');
+
+            if (markers && markers.length > 0) {
+                // LOCK ON
+                lockedTargetId = markers[0].id;
+
+                if (reticle) {
+                    reticle.style.borderColor = "#00ff00"; // Green
+                    reticle.style.boxShadow = "0 0 15px #00ff00";
+                }
+                if (scanLabel) {
+                    scanLabel.innerText = "TARGET LOCKED: " + lockedTargetId;
+                    scanLabel.style.color = "#00ff00";
+                }
             } else {
-                showFeedback("EMPTY!", "#555");
+                // NO TARGET
+                lockedTargetId = null;
+
+                if (reticle) {
+                    reticle.style.borderColor = "var(--primary-red)";
+                    reticle.style.boxShadow = "0 0 10px var(--primary-red)";
+                }
+                if (scanLabel) {
+                    scanLabel.innerText = "SCANNING...";
+                    scanLabel.style.color = "var(--primary-red)";
+                }
             }
-        }
+        } catch (e) { }
     }
+    requestAnimationFrame(aimLoop);
 }
+
+// Global target lock
+let lockedTargetId = null;
+
+// FIRE ACTION (Triggered by Button)
+/* scanFrame deleted, functionality moved to aimLoop + fire handler */
 
 // --- GAMEPLAY ---
 const shootSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2144/2144-preview.mp3'); // Loud Gunshot
@@ -188,16 +260,31 @@ fireBtn.addEventListener('click', (e) => {
     fireBtn.style.transform = "translateX(-50%) scale(0.9)";
     setTimeout(() => fireBtn.style.transform = "translateX(-50%) scale(1)", 100);
 
+    // RELOAD CHECK FIRST (Can reload even if empty)
+    if (lockedTargetId === 0) {
+        handleHit(0);
+        return;
+    }
+
     if (ammo <= 0) {
         showFeedback("NO AMMO - SCAN RELOAD (ID 0)", "#ffaa00");
         emptySound.currentTime = 0;
         emptySound.play().catch(() => { });
-    } else {
-        shootSound.currentTime = 0;
-        shootSound.play().catch(e => console.log('Audio play failed', e));
+        return;
     }
 
-    scanFrame();
+    // FIRE
+    shootSound.currentTime = 0;
+    shootSound.play().catch(e => console.log('Audio play failed', e));
+
+    if (lockedTargetId !== null) {
+        handleHit(lockedTargetId);
+    } else {
+        // MISS
+        ammo--;
+        updateAmmoDisplay();
+        showFeedback("MISS", "#fff");
+    }
 });
 
 function handleHit(markerId) {
@@ -225,22 +312,28 @@ function handleHit(markerId) {
 socket.on('hit', (data) => {
     console.log("I WAS HIT!");
     // Vibrate
-    if (navigator.vibrate) navigator.vibrate(500);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
     // Play Sound
     hitSound.currentTime = 0;
     hitSound.play().catch(() => { });
 
-    // Show Effect
+    // Show Effect (Blood/Damage)
+    hitOverlay.style.transition = 'none';
     hitOverlay.style.opacity = '1';
+    hitOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+    hitOverlay.innerHTML = "<h1 style='color:red; font-size:5rem; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-shadow:0 0 20px black;'>HIT!</h1>";
 
-    // Shake screen?
+    // Shake screen
     document.body.style.animation = "shake 0.5s cubic-bezier(.36,.07,.19,.97) both";
 
     setTimeout(() => {
+        hitOverlay.style.transition = 'opacity 1s';
         hitOverlay.style.opacity = '0';
+        hitOverlay.style.backgroundColor = 'transparent';
         document.body.style.animation = "none";
-    }, 2000);
+        setTimeout(() => hitOverlay.innerHTML = "", 1000); // Clear text after fade
+    }, 1000);
 });
 
 socket.on('shotFeedback', (data) => {

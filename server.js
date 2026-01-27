@@ -17,6 +17,20 @@ function generateCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
+function getDistanceInKm(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0; // Bypass if invalid
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c; // Distance in km
+    return d;
+}
+
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
@@ -32,12 +46,14 @@ io.on('connection', (socket) => {
             duration: duration,
             startTime: Date.now(),
             endTime: Date.now() + duration,
+            lat: data.lat,
+            lon: data.lon,
             players: {},
             zones: {}, // { 200: 'red', 201: 'blue' }
             status: 'waiting'
         };
 
-        console.log(`Game created: ${code} (Duration: ${data.duration || 15}m)`);
+        console.log(`Game created: ${code} (Duration: ${data.duration || 15}m) @ [${data.lat}, ${data.lon}]`);
         callback({ success: true, gameCode: code });
     });
 
@@ -52,11 +68,21 @@ io.on('connection', (socket) => {
 
         const game = games[actualGameCode];
 
+        // CHECK DISTANCE (500m limit)
+        if (game.lat && game.lon) {
+            const dist = getDistanceInKm(game.lat, game.lon, data.lat, data.lon);
+            console.log(`Join attempt from distance: ${dist.toFixed(3)} km`);
+            if (dist > 0.5) { // 500m
+                socket.emit('error', `TROP LOIN DU QG ! (${(dist * 1000).toFixed(0)}m > 500m)`);
+                return;
+            }
+        }
+
         socket.join(actualGameCode);
         socketMap[socket.id] = actualGameCode;
 
-        // AUTO-BALANCE
-        if (!data.team || data.team === 'auto' || data.team === 'null') {
+        // AUTO-BALANCE (Skip if spectator)
+        if (data.team !== 'spectator' && (!data.team || data.team === 'auto' || data.team === 'null')) {
             const players = Object.values(game.players);
             const redCount = players.filter(p => p.team === 'red').length;
             const blueCount = players.filter(p => p.team === 'blue').length;
@@ -67,7 +93,9 @@ io.on('connection', (socket) => {
         let markerId = -1;
         const usedIds = Object.values(game.players).map(p => p.markerId);
 
-        if (data.username === 'Admin') {
+        if (data.team === 'spectator') {
+            markerId = 256; // Admin Spectator
+        } else if (data.username === 'Admin') {
             markerId = 256;
         } else {
             if (data.team === 'red') {
@@ -164,11 +192,20 @@ io.on('connection', (socket) => {
         if (targetSocketId) {
             const target = game.players[targetSocketId];
 
+            // IMMUNITY CHECK (10s Delta Kill)
+            const now = Date.now();
+            if (target.lastHitTime && (now - target.lastHitTime < 10000)) {
+                socket.emit('shotFeedback', { msg: `CIBLE INVULNÉRABLE\n(RESPAWN)`, color: 'orange' });
+                return;
+            }
+
             if (target.team === shooter.team) {
                 shooter.score -= 5;
                 socket.emit('shotFeedback', { msg: `TIR AMI: ${target.username}`, color: 'orange' });
             } else {
                 // VALID HIT
+                target.lastHitTime = now; // Set immunity start
+
                 const isCommander = (target.markerId === 1 || target.markerId === 50);
                 const points = isCommander ? 20 : 10;
 
@@ -192,8 +229,8 @@ io.on('connection', (socket) => {
 
             console.log(`[SHOOT] [Game ${gameCode}] ${shooter.username} (${shooter.team}) fired at Marker ${targetId}`);
         } else {
-            // MISS
-            // socket.emit('shotFeedback', { msg: "MISS", color: '#ffaaaa' });
+            // MISS (Target ID not found in game)
+            socket.emit('shotFeedback', { msg: `CIBLE INCONNUE (${targetId})`, color: 'gray' });
         }
     });
 });

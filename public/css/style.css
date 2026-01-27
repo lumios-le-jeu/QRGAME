@@ -24,6 +24,8 @@ body {
     /* Prevent scrolling */
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
+    /* Mobile fix */
 }
 
 /* --- UTILS --- */
@@ -160,15 +162,14 @@ input:focus {
 }
 
 .hud-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;
+    height: 100dvh;
     z-index: 20;
     pointer-events: none;
-    /* Let clicks pass to controls */
-    padding: 10px;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* HUD ITEMS */
@@ -450,9 +451,27 @@ input:focus {
     height: 60px;
     background: rgba(255, 50, 50, 0.8);
     border-radius: 50%;
-
-    40%,
-    60% {
-        transform: translate3d(4px, 0, 0);
-    }
-}
+}@ k e y f r a m e s   s h a k e   {  
+  
+         1 0 % ,  
+         9 0 %   {  
+                 t r a n s f o r m :   t r a n s l a t e 3 d ( - 1 p x ,   0 ,   0 ) ;  
+         }  
+  
+         2 0 % ,  
+         8 0 %   {  
+                 t r a n s f o r m :   t r a n s l a t e 3 d ( 2 p x ,   0 ,   0 ) ;  
+         }  
+  
+         3 0 % ,  
+         5 0 % ,  
+         7 0 %   {  
+                 t r a n s f o r m :   t r a n s l a t e 3 d ( - 4 p x ,   0 ,   0 ) ;  
+         }  
+  
+         4 0 % ,  
+         6 0 %   {  
+                 t r a n s f o r m :   t r a n s l a t e 3 d ( 4 p x ,   0 ,   0 ) ;  
+         }  
+ }  
+ 

@@ -5,7 +5,7 @@ Puisque vous avez un hébergement Hostinger (lumios-qc.com), voici comment mettr
 ## PRÉ-REQUIS HOSTINGER
 1. Connectez-vous à votre **hPanel** (comme sur votre capture d'écran).
 2. Regardez dans le menu de gauche ou la barre de recherche:
-   - Cherchez **"Node.js"** ou **"Setup Node.js App"**.
+   - Cherchez **"Node.js"** ou **"![alt text](image.png)"**.
    - *Note : Si vous ne trouvez pas cette option, votre plan (souvent le "Web Hosting" basique) ne supporte peut-être pas Node.js, mais seulement PHP. Dans ce cas, contactez le support ou utilisez la méthode "NGROK" ci-dessous.*
 
 ---
