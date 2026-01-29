@@ -86,7 +86,12 @@ io.on('connection', (socket) => {
             const players = Object.values(game.players);
             const redCount = players.filter(p => p.team === 'red').length;
             const blueCount = players.filter(p => p.team === 'blue').length;
-            data.team = (redCount <= blueCount) ? 'red' : 'blue';
+
+            if (redCount < blueCount) data.team = 'red';
+            else if (blueCount < redCount) data.team = 'blue';
+            else data.team = Math.random() < 0.5 ? 'red' : 'blue';
+
+            console.log(`[AUTO-BALANCE] P(${redCount}) vs B(${blueCount}) -> Assigned ${data.team}`);
         }
 
         // ASSIGN MARKER ID
@@ -124,7 +129,10 @@ io.on('connection', (socket) => {
             lives: 3,
             kills: 0,
             deaths: 0,
-            captures: 0
+            captures: 0,
+            lat: data.lat || 0,
+            lon: data.lon || 0,
+            lastHitTime: 0
         };
 
         socket.emit('assignedId', { id: markerId, team: data.team });
@@ -152,18 +160,45 @@ io.on('connection', (socket) => {
     });
 
     // --- SHOOTING & ZONES ---
-    socket.on('shoot', (targetId) => {
+    socket.on('shoot', (payload) => {
         const gameCode = socketMap[socket.id];
         if (!gameCode || !games[gameCode]) return;
 
         const game = games[gameCode];
         if (game.status === 'ended') return; // No shooting if ended
 
+        // Parse Payload (ID or Object)
+        let targetId = payload;
+        let coords = null;
+        if (typeof payload === 'object') {
+            targetId = payload.id;
+            coords = { lat: payload.lat, lon: payload.lon };
+        }
+
         const shooter = game.players[socket.id];
         if (!shooter) return;
 
         // 1. ZONE CAPTURE (IDs 200-250)
         if (targetId >= 200 && targetId <= 250) {
+            // ADMIN PLACING ZONE
+            if (payload.placing && shooter.markerId === 1 && coords) {
+                if (!game.zoneCoords) game.zoneCoords = {};
+                game.zoneCoords[targetId] = coords;
+
+                io.to(gameCode).emit('shotFeedback', {
+                    msg: `ZONE ${targetId} DÉPLOYÉE !`,
+                    color: 'cyan'
+                });
+                return;
+            }
+
+            // NORMAL CAPTURE CHECK
+            if (!game.zoneCoords || !game.zoneCoords[targetId]) {
+                socket.emit('shotFeedback', { msg: "ZONE NON DÉPLOYÉE\n(ADMIN REQUIS)", color: 'gray' });
+                return;
+            }
+
+            // Process Capture
             if (game.zones[targetId] !== shooter.team) {
                 game.zones[targetId] = shooter.team;
                 shooter.score += 50;
@@ -177,6 +212,7 @@ io.on('connection', (socket) => {
                 io.to(gameCode).emit('gameState', {
                     players: game.players,
                     zones: game.zones,
+                    zoneCoords: game.zoneCoords || {},
                     redZoneCount: Object.values(game.zones).filter(t => t === 'red').length,
                     blueZoneCount: Object.values(game.zones).filter(t => t === 'blue').length
                 });
@@ -233,11 +269,34 @@ io.on('connection', (socket) => {
             socket.emit('shotFeedback', { msg: `CIBLE INCONNUE (${targetId})`, color: 'gray' });
         }
     });
+    socket.on('updatePosition', (coords) => {
+        // coords: { lat, lon }
+        const gameCode = socketMap[socket.id];
+        if (gameCode && games[gameCode]) {
+            const player = games[gameCode].players[socket.id];
+            if (player) {
+                player.lat = coords.lat;
+                player.lon = coords.lon;
+            }
+        }
+    });
 });
 
-// --- GAME LOOP CHECK ---
+// --- GAME LOOP CHECK (State & Time) ---
 setInterval(() => {
     Object.values(games).forEach(game => {
+        if (game.status === 'active') {
+            // Broadcast Game State (Positions, Scores, Immunity)
+            io.to(game.id).emit('gameState', {
+                players: game.players,
+                zones: game.zones,
+                zoneCoords: game.zoneCoords || {},
+                redZoneCount: Object.values(game.zones).filter(t => t === 'red').length,
+                blueZoneCount: Object.values(game.zones).filter(t => t === 'blue').length,
+                timeLeft: Math.max(0, game.endTime - Date.now())
+            });
+        }
+
         if (game.status === 'waiting' || game.status === 'active') {
             if (Date.now() >= game.endTime) {
                 game.status = 'ended';

@@ -5,13 +5,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QRSHOT - Battle Arena</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap"
         rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Force Minimap Size Override */
+        .minimap-container {
+            width: 150px !important;
+            height: 150px !important;
+        }
+    </style>
     <!-- Aruco Libs -->
     <script src="js/lib/cv.js"></script>
     <script src="js/lib/aruco.js"></script>
@@ -108,13 +115,15 @@
         <div class="hud-overlay">
 
             <!-- TOP LEFT: MINIMAP -->
-            <div class="hud-item minimap-container">
-                <div class="minimap">
-                    <!-- Placeholder map points -->
-                    <div class="map-point zone-a">A</div>
-                    <div class="map-point zone-b">B</div>
-                    <div class="map-point player-pos"></div>
-                </div>
+            <div id="mini-map" class="hud-item minimap-container"> <!-- ID added for JS access -->
+                <div class="minimap-grid"></div>
+                <!-- Radar line added via JS -->
+            </div>
+
+            <!-- GAME CODE (DISCREET) -->
+            <div id="game-code-display"
+                style="position:absolute; top:5px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.3); font-family:'Courier New', monospace; font-size:12px; pointer-events:none; z-index:5;">
+                CODE: ----
             </div>
 
             <!-- TOP RIGHT: SCORE -->
@@ -159,7 +168,7 @@
         </div>
     </section>
 
-    <script src="js/client.js"></script>
+    <script src="js/client.js?v=4"></script>
 </body>
 
 </html>

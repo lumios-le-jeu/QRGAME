@@ -1,4 +1,8 @@
 const socket = io();
+let globalZones = {};
+let globalZoneCoords = {};
+let globalPlayers = [];
+let activeGameCode = null;
 
 // DOM Elements
 const homeScreen = document.getElementById('page-home');
@@ -58,36 +62,71 @@ const getCurrentLocation = () => {
     });
 };
 
+// iOS Compass Permission Helper
+async function requestSensors() {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const response = await DeviceOrientationEvent.requestPermission();
+            if (response === 'granted') {
+                console.log("Compass granted");
+            } else {
+                alert("Permission boussole refusée");
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+}
+
 // CONFIRM JOIN
-document.getElementById('btn-confirm-join').addEventListener('click', async () => {
+// CONFIRM JOIN
+document.getElementById('btn-confirm-join').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.innerText = "Chargement...";
+
+    // 1. Request Sensors (Must be first on click)
+    await requestSensors();
+
     const code = document.getElementById('join-code').value.toUpperCase();
     const pseudo = document.getElementById('join-pseudo').value || 'Soldier';
     const team = document.getElementById('join-team').value;
 
     if (code.length !== 4) {
         alert("Code invalide (4 caractères)");
+        btn.disabled = false;
+        btn.innerText = "GO";
         return;
     }
 
     try {
         const coords = await getCurrentLocation();
         enterGame(pseudo, team, code, coords);
+        // Do NOT re-enable, we change screen
     } catch (err) {
         console.error(err);
         alert("GPS REQUIS : Donnez l'accès à la localisation pour rejoindre.");
-        // Dev fallback for testing if GPS fails on non-https
-        // enterGame(pseudo, team, code, {lat: 0, lon: 0}); 
+        btn.disabled = false;
+        btn.innerText = "GO";
     }
 });
 
 // CONFIRM CREATE
-document.getElementById('btn-confirm-create').addEventListener('click', async () => {
+// CONFIRM CREATE
+document.getElementById('btn-confirm-create').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.innerText = "Création...";
+
+    // 1. Request Sensors
+    await requestSensors();
+
     const name = document.getElementById('create-name').value;
     const teams = document.getElementById('create-teams').value;
     const duration = document.getElementById('create-duration').value;
 
     try {
-        alert("Acquisition position GPS...");
+        // alert("Acquisition position GPS..."); // Removed alert to rely on button text
         const coords = await getCurrentLocation();
         const isPlayer = document.getElementById('create-is-player').checked;
 
@@ -103,11 +142,16 @@ document.getElementById('btn-confirm-create').addEventListener('click', async ()
                     // Creator joins as Spectator (Admin)
                     enterGame('Admin', 'spectator', response.gameCode, coords);
                 }
+            } else {
+                btn.disabled = false;
+                btn.innerText = "Créer la Partie";
             }
         });
     } catch (err) {
         console.error(err);
         alert("ERREUR GPS : Impossible de créer la partie sans localisation.\nVérifiez vos permissions.");
+        btn.disabled = false;
+        btn.innerText = "Créer la Partie";
     }
 });
 
@@ -122,7 +166,19 @@ function updateScoreBoard() {
 }
 
 function enterGame(username, team, gameCode, coords) {
+    activeGameCode = gameCode;
     showScreen('game');
+
+    // iOS Compass Permission (User Interaction Required Here)
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+            .then(permissionState => {
+                if (permissionState === 'granted') {
+                    // Logic is handled in startGpsTracking listener
+                }
+            })
+            .catch(console.error);
+    }
 
     startCamera();
     updateAmmoDisplay();
@@ -136,9 +192,43 @@ function enterGame(username, team, gameCode, coords) {
         lon: coords ? coords.lon : 0
     });
 
+    // Set Game Code on HUD
+    const codeDisplay = document.getElementById('game-code-display');
+    if (codeDisplay) codeDisplay.innerText = `CODE: ${gameCode}`;
+
     // We wait for server to confirm team via 'assignedId' or 'playerList' before updateTeamDisplay
     // But we can set a temporary "Waiting..." state
-    document.getElementById('my-team').innerText = "?";
+    // Start REAL GPS Tracking
+    startGpsTracking();
+}
+
+let myLat = 0;
+let myLon = 0;
+let currentHeading = 0;
+
+function startGpsTracking() {
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition((pos) => {
+            myLat = pos.coords.latitude;
+            myLon = pos.coords.longitude;
+            socket.emit('updatePosition', { lat: myLat, lon: myLon });
+        }, (err) => console.error(err), {
+            enableHighAccuracy: true,
+            maximumAge: 1000
+        });
+    }
+
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (event) => {
+            if (event.webkitCompassHeading) {
+                currentHeading = event.webkitCompassHeading;
+            } else if (event.alpha) {
+                currentHeading = 360 - event.alpha;
+            }
+            // Update Map Rotation in real-time
+            if (globalPlayers && globalPlayers.length > 0) updateMiniMap(globalPlayers);
+        });
+    }
 }
 
 // --- CAMERA & SCANNING ---
@@ -287,8 +377,18 @@ fireBtn.addEventListener('click', (e) => {
     }
 });
 
+// Globals
+let isAdminMode = false;
+
 function handleHit(markerId) {
     console.log("Marker Found:", markerId);
+
+    // ADMIN MODE ACTIVATION (Marker 256)
+    if (markerId === 256) {
+        isAdminMode = true;
+        showFeedback("MODE ADMIN ACTIVÉ\nTIREZ SUR UNE ZONE", "cyan");
+        return;
+    }
 
     // RELOAD LOGIC (Marker 0)
     if (markerId === 0) {
@@ -300,10 +400,22 @@ function handleHit(markerId) {
         return;
     }
 
-    if (ammo > 0) {
-        ammo--;
-        updateAmmoDisplay();
-        socket.emit('shoot', markerId); // Send integer
+    if (ammo > 0 || isAdminMode) { // Admin can shoot even without ammo to place zone? "meme sans balle de dispo" -> Yes.
+        if (!isAdminMode) {
+            ammo--;
+            updateAmmoDisplay();
+        }
+
+        if (markerId >= 200) {
+            // Send Coords for Zone (and Admin Flag)
+            socket.emit('shoot', { id: markerId, lat: myLat, lon: myLon, placing: isAdminMode });
+            if (isAdminMode) {
+                isAdminMode = false; // Consume flag
+                showFeedback("PLACEMENT EN COURS...", "orange");
+            }
+        } else {
+            socket.emit('shoot', markerId);
+        }
     } else {
         showFeedback("EMPTY!", "#ff0000");
     }
@@ -422,7 +534,13 @@ socket.on('assignedId', (data) => {
 });
 
 socket.on('gameState', (data) => {
-    // data: { players, zones, redZoneCount, blueZoneCount }
+    // data: { players, zones, zoneCoords, redZoneCount, blueZoneCount }
+    if (data.points) { /* legacy check? */ }
+    // Update Globals
+    if (data.zones) globalZones = data.zones;
+    if (data.zoneCoords) globalZoneCoords = data.zoneCoords;
+    if (data.players) globalPlayers = Object.values(data.players);
+
     if (data.redZoneCount !== undefined) redZones = data.redZoneCount;
     if (data.blueZoneCount !== undefined) blueZones = data.blueZoneCount;
 
@@ -443,60 +561,179 @@ socket.on('gameState', (data) => {
     }
 
     updateScoreBoard();
+    if (data.players) updateMiniMap(Object.values(data.players));
 });
 
 socket.on('playerList', (players) => {
-    // Update MiniMap
+    updateMiniMap(players);
+});
+
+function updateMiniMap(players) {
     const map = document.getElementById('mini-map');
 
-    // Clear old markers (only remove .player-marker)
-    const oldMarkers = document.querySelectorAll('.player-marker');
+    // Clear old markers
+    const oldMarkers = document.querySelectorAll('.player-marker, .zone-marker');
     oldMarkers.forEach(m => m.remove());
 
-    // Ensure radar line exists
+    // Ensure radar line and center cross
     if (!map.querySelector('.radar-line')) {
         const radar = document.createElement('div');
         radar.className = 'radar-line';
         map.appendChild(radar);
+
+        const center = document.createElement('div');
+        center.style.position = 'absolute';
+        center.style.top = '50%';
+        center.style.left = '50%';
+        center.style.width = '6px';
+        center.style.height = '6px';
+        center.style.background = 'white';
+        center.style.borderRadius = '50%';
+        center.style.transform = 'translate(-50%, -50%)';
+        center.style.boxShadow = '0 0 4px black';
+        center.style.zIndex = '5';
+        map.appendChild(center);
     }
 
-    // Calculate scores again just in case (redundancy is fine here)
-    let rs = 0;
-    let bs = 0;
+    // Dynamic North Marker (Update every frame)
+    let north = map.querySelector('.north-marker');
+    if (!north) {
+        north = document.createElement('div');
+        north.className = 'north-marker';
+        north.innerText = 'N';
+        north.style.position = 'absolute';
+        north.style.color = 'red';
+        north.style.fontWeight = 'bold';
+        north.style.fontSize = '12px';
+        north.style.transform = 'translate(-50%, -50%)';
+        map.appendChild(north);
+    }
 
+    // Calculate North Position
+    const theta_rad = (currentHeading || 0) * Math.PI / 180;
+    const nav_angle = -Math.PI / 2 - theta_rad;
+    const n_px = 45 * Math.cos(nav_angle);
+    const n_py = 45 * Math.sin(nav_angle);
+    north.style.left = (50 + n_px) + '%';
+    north.style.top = (50 + n_py) + '%';
+
+    // DEBUG: Stats & SHOW PLAYER COUNT
+    const debugEl = document.getElementById('game-code-display');
+    if (debugEl) {
+        const zCount = globalZoneCoords ? Object.keys(globalZoneCoords).length : 0;
+        debugEl.innerText = `CODE: ${activeGameCode || '?'} | H: ${Math.round(currentHeading)} | P: ${players.length}`;
+    }
+
+    // GPS Check
+    if (!myLat || !myLon) {
+        // Continue even if no GPS to show others at fallback pos
+    }
+
+    // ZONE LOGIC (Prep)
+    const R_h = 6371e3;
+    const maxDist_h = 50;
+    const scale_h = 50 / maxDist_h;
+    const theta_h = (currentHeading || 0) * Math.PI / 180;
+
+    const project = (lat, lon) => {
+        // Fallback to 0 if missing (prevents NaN)
+        const pLat = lat || 0;
+        const pLon = lon || 0;
+        const mLat = myLat || 0;
+        const mLon = myLon || 0;
+
+        const dLat = (pLat - mLat) * Math.PI / 180;
+        const dLon = (pLon - mLon) * Math.PI / 180;
+        const dx = dLon * Math.cos((mLat + pLat) / 2 * Math.PI / 180) * R_h;
+        const dy = dLat * R_h;
+
+        const rx = dx * Math.cos(theta_h) - dy * Math.sin(theta_h);
+        const ry = dx * Math.sin(theta_h) + dy * Math.cos(theta_h);
+
+        let px = rx * scale_h;
+        let py = -ry * scale_h;
+
+        const dist = Math.sqrt(px * px + py * py);
+        if (dist > 40) { // SAFE MARGIN Clamping
+            const angle = Math.atan2(py, px);
+            px = 40 * Math.cos(angle);
+            py = 40 * Math.sin(angle);
+        }
+        return { px, py };
+    };
+
+    // 1. DRAW ZONES
+    if (globalZoneCoords) {
+        Object.entries(globalZoneCoords).forEach(([id, coords]) => {
+            if (coords && coords.lat) {
+                const pos = project(coords.lat, coords.lon);
+
+                const marker = document.createElement('div');
+                marker.className = 'zone-marker';
+                marker.style.position = 'absolute';
+                marker.style.width = '12px';
+                marker.style.height = '12px';
+
+                let color = 'orange';
+                if (globalZones && globalZones[id] === 'red') color = 'var(--primary-red)';
+                if (globalZones && globalZones[id] === 'blue') color = 'var(--primary-blue)';
+                marker.style.backgroundColor = color;
+                marker.style.border = '2px solid white';
+                marker.style.transform = 'translate(-50%, -50%)';
+                marker.style.zIndex = '4';
+                marker.style.left = (50 + pos.px) + '%';
+                marker.style.top = (50 + pos.py) + '%';
+
+                marker.innerText = id;
+                marker.style.fontSize = '8px';
+                marker.style.color = 'black';
+                marker.style.display = 'flex';
+                marker.style.justifyContent = 'center';
+                marker.style.alignItems = 'center';
+                marker.style.fontWeight = 'bold';
+
+                const mapRef = document.getElementById('mini-map');
+                if (mapRef) mapRef.appendChild(marker);
+            }
+        });
+    }
+
+    // 2. DRAW PLAYERS
     players.forEach(p => {
-        if (p.team === 'red') rs += p.score;
-        if (p.team === 'blue') bs += p.score;
+        const myIdDisplay = document.getElementById('my-id-display');
+        const isMe = (p.id === socket.id) || (myIdDisplay && parseInt(myIdDisplay.innerText) === p.markerId);
 
-        // Minimap Marker
+        if (isMe) return;
+
+        const pos = project(p.lat, p.lon);
+
         const marker = document.createElement('div');
         marker.className = `player-marker ${p.team}`;
+        marker.innerText = p.markerId;
 
-        // Cluster positions
-        let top, left;
-        if (p.team === 'red') {
-            top = 10 + (p.markerId * 2) % 30;
-            left = 10 + (p.markerId * 3) % 30;
-        } else {
-            top = 60 + (p.markerId * 2) % 30;
-            left = 60 + (p.markerId * 3) % 30;
-        }
+        // Ensure Visibility (Explicit Styles)
+        marker.style.position = 'absolute';
+        marker.style.width = '14px';
+        marker.style.height = '14px';
+        marker.style.borderRadius = '50%';
+        marker.style.backgroundColor = (p.team === 'red') ? 'var(--primary-red)' : 'var(--primary-blue)';
+        marker.style.border = '2px solid white';
+        marker.style.zIndex = '6';
 
-        // Highlight ME
-        const myIdDisplay = document.getElementById('my-id-display');
-        if (myIdDisplay && (parseInt(myIdDisplay.innerText) === p.markerId || p.id === socket.id)) {
-            marker.classList.add('me');
-        }
+        marker.style.fontSize = '9px';
+        marker.style.fontWeight = 'bold';
+        marker.style.color = '#fff';
+        marker.style.display = 'flex';
+        marker.style.justifyContent = 'center';
+        marker.style.alignItems = 'center';
 
-        marker.style.top = top + '%';
-        marker.style.left = left + '%';
-        map.appendChild(marker);
+        marker.style.left = (50 + pos.px) + '%';
+        marker.style.top = (50 + pos.py) + '%';
+
+        const mapRef = document.getElementById('mini-map');
+        if (mapRef) mapRef.appendChild(marker);
     });
-
-    redScore = rs;
-    blueScore = bs;
-    updateScoreBoard();
-});
+}
 
 // Remove random logic, rely on server assignment
 

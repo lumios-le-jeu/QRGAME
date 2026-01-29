@@ -475,3 +475,8 @@ input:focus {
          }  
  }  
  
+/* OVERRIDE SIZE */
+.minimap-container {
+    width: 150px !important;
+    height: 150px !important;
+}
