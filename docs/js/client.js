@@ -1,8 +1,20 @@
-const socket = io();
+// Detect environment: Localhost vs Production (GitHub Pages)
+const GAME_SERVER_URL = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
+    ? "http://localhost:3000"
+    : "https://fun.qrshotgame.fr";
+
+const socket = io(GAME_SERVER_URL);
 let globalZones = {};
 let globalZoneCoords = {};
 let globalPlayers = [];
 let activeGameCode = null;
+
+socket.on("connect_error", (err) => {
+    console.error("Server Connection Failed:", err);
+    if (typeof showFeedback === "function") {
+        showFeedback("⚠️ SERVEUR HORS LIGNE (Allumez le PC !)", "red");
+    }
+});
 
 // DOM Elements
 const homeScreen = document.getElementById('page-home');

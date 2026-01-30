@@ -7,7 +7,8 @@ const io = new Server(server);
 const path = require('path');
 
 // Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the 'docs' directory (renamed for GitHub Pages compatibility)
+app.use(express.static(path.join(__dirname, 'docs')));
 
 // Game State
 const games = {}; // { [gameCode]: { status, teams, players, zones } }
