@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QRSHOT - Battle Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700;900&family=Inter:wght@300;400;600;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Custom Styles for Compatibility & HUD -->
+    <link rel="stylesheet" href="css/style.css?v=7">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0f172a',
+                            primary: '#3b82f6',
+                            accent: '#f59e0b',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Orbitron', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Logic Compatibility */
+        .screen {
+            display: none;
+            /* Default hidden */
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow-y: auto;
+        }
+
+        .screen.active {
+            display: flex;
+            /* Tailwind flex for centering usually */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Overrides to ensure Tailwind takes precedence over old style.css where needed */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        /* Glass Panel Re-styled with Tailwind classes in HTML, but ensuring defaults */
+        .glass-panel-modern {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* HUD specific fixes */
+        .minimap-container {
+            width: 150px !important;
+            height: 150px !important;
+        }
+    </style>
+
+    <!-- Aruco Libs -->
+    <script src="js/lib/cv.js"></script>
+    <script src="js/lib/aruco.js"></script>
+    <script src="js/lib/svd.js"></script>
+</head>
+
+<body class="bg-slate-900 text-slate-200 antialiased overflow-hidden selection:bg-blue-500 selection:text-white">
+
+    <!-- PAGE: ACCUEIL -->
+    <section id="page-home" class="screen active p-4">
+        <div class="glass-panel-modern max-w-md w-full p-8 rounded-2xl text-center space-y-8 animate-fade-in-up">
+
+            <div class="space-y-2">
+                <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 font-mono tracking-wider glitch-text"
+                    data-text="QRSHOT">QRSHOT</h1>
+                <p class="text-slate-400 tracking-widest text-sm font-semibold">TACTICAL AR BATTLE</p>
+            </div>
+
+            <div class="space-y-4 w-full">
+                <button id="btn-goto-join"
+                    class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/40 transition-all transform hover:scale-105 flex items-center justify-center gap-3">
+                    <i class="fa-solid fa-right-to-bracket"></i> REJOINDRE
+                </button>
+                <button id="btn-goto-create"
+                    class="w-full py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl border border-slate-600 transition-all transform hover:scale-105 flex items-center justify-center gap-3">
+                    <i class="fa-solid fa-plus"></i> CRÉER PARTIE
+                </button>
+                <a href="/"
+                    class="block text-center text-slate-500 hover:text-blue-400 text-sm font-medium transition-colors mt-4">
+                    <i class="fa-solid fa-circle-info mr-1"></i> INFOS DU JEU
+                </a>
+            </div>
+
+            <div id="lobbies-list" class="w-full pt-6 border-t border-slate-700/50">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider"><i
+                            class="fa-solid fa-wifi mr-1"></i> Parties à Proximité</h3>
+                    <button id="btn-scan-games"
+                        class="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-1 rounded-md transition-colors border border-slate-700">
+                        <i class="fa-solid fa-rotate-right"></i> REFRESH
+                    </button>
+                </div>
+                <div id="nearby-results"
+                    class="bg-slate-950/50 rounded-lg p-3 min-h-[60px] flex items-center justify-center border border-slate-800">
+                    <small class="text-slate-600 italic">Appuyez sur REFRESH pour scanner.</small>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE: REJOINDRE -->
+    <section id="page-join" class="screen p-4">
+        <div class="glass-panel-modern max-w-sm w-full p-8 rounded-2xl space-y-6">
+            <h2 class="text-2xl font-bold text-white text-center mb-6 font-mono">REJOINDRE MISSION</h2>
+
+            <div class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Code d'accès</label>
+                    <input type="text" id="join-code" placeholder="XXXX" maxlength="4"
+                        class="w-full bg-slate-800 border-slate-700 text-white text-center text-2xl tracking-widest font-mono rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none uppercase transition-all">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Pseudo</label>
+                    <input type="text" id="join-pseudo" placeholder="Soldier76"
+                        class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Équipe</label>
+                    <div class="relative">
+                        <select id="join-team"
+                            class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-3 appearance-none focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold">
+                            <option value="auto">🎲 AUTOMATIQUE</option>
+                            <option value="red">🔴 ROUGE</option>
+                            <option value="blue">🔵 BLEU</option>
+                        </select>
+                        <div
+                            class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-4">
+                <button id="btn-back-home-1"
+                    class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors">
+                    RETOUR
+                </button>
+                <button id="btn-confirm-join"
+                    class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/40 transition-colors">
+                    GO !
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE: CRÉER (ADMIN) -->
+    <section id="page-create" class="screen p-4">
+        <div class="glass-panel-modern max-w-sm w-full p-6 rounded-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold text-white text-center mb-4 font-mono">NOUVELLE OPÉRATION</h2>
+
+            <div class="space-y-3">
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Nom de Mission</label>
+                    <input type="text" id="create-name" value="Mission Alpha"
+                        class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase">Équipes</label>
+                        <input type="number" id="create-teams" value="2" min="2" max="4" onchange="checkLimits()"
+                            class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase">Max Joueurs</label>
+                        <input type="number" id="create-max-players" value="2" min="2" max="50" onchange="checkLimits()"
+                            class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Durée (Minutes)</label>
+                    <input type="number" id="create-duration" value="15" min="1" max="60" onchange="checkLimits()"
+                        class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <!-- RESERVATION CODE -->
+                <div id="reservation-section"
+                    class="hidden p-3 border border-red-500/30 bg-red-900/10 rounded-lg space-y-2">
+                    <label class="text-xs font-bold text-red-400 uppercase flex items-center gap-1">
+                        <i class="fa-solid fa-lock"></i> CODE RÉSERVATION REQUIS
+                    </label>
+                    <input type="text" id="create-res-code" placeholder="CODE REÇU PAR MAIL"
+                        class="w-full bg-slate-900 border-red-500/50 text-red-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-red-500 outline-none placeholder-red-900/50">
+                    <p class="text-[10px] text-red-400/70">Requis pour >2 Équipes, >5 Joueurs ou >30min.</p>
+                </div>
+
+                <div class="flex items-center justify-center gap-2 py-2">
+                    <input type="checkbox" id="create-is-player" checked
+                        class="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900">
+                    <label for="create-is-player" class="text-sm font-medium text-slate-300">Participer en tant que
+                        joueur</label>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button id="btn-back-home-2"
+                    class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors">
+                    ANNULER
+                </button>
+                <button id="btn-confirm-create"
+                    class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/40 transition-colors">
+                    LANCER
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE: JEU (HUD - Keeping minimal styling to avoid breaking AR view) -->
+    <section id="page-game" class="screen">
+        <video id="camera-feed" autoplay playsinline muted
+            class="absolute inset-0 w-full h-full object-cover z-0"></video>
+        <canvas id="camera-canvas" hidden></canvas>
+
+        <!-- HUD OVERLAY -->
+        <div class="hud-overlay absolute inset-0 z-10 pointer-events-none p-4">
+
+            <!-- Top Left: Minimap -->
+            <div id="mini-map"
+                class="hud-item minimap-container pointer-events-auto bg-black/50 border border-blue-500/30 rounded-full backdrop-blur-sm shadow-lg overflow-hidden relative">
+                <div class="minimap-grid w-full h-full opacity-30"></div>
+                <!-- JS adds content here -->
+            </div>
+
+            <!-- Game Code -->
+            <div id="game-code-display"
+                class="absolute top-2 left-1/2 -translate-x-1/2 text-xs font-mono text-white/40 bg-black/20 px-2 py-1 rounded">
+                CODE: ----
+            </div>
+
+            <!-- Top Right: Score -->
+            <div class="absolute top-4 right-4 flex flex-col gap-1 w-24">
+                <div class="bg-red-900/60 border-l-4 border-red-500 p-1 flex justify-between items-center px-2">
+                    <span class="text-[10px] font-bold text-red-200">RED</span>
+                    <span id="score-red" class="text-lg font-bold text-white font-mono">0</span>
+                </div>
+                <div class="bg-blue-900/60 border-l-4 border-blue-500 p-1 flex justify-between items-center px-2">
+                    <span class="text-[10px] font-bold text-blue-200">BLUE</span>
+                    <span id="score-blue" class="text-lg font-bold text-white font-mono">0</span>
+                </div>
+            </div>
+
+            <!-- Center: Reticle -->
+            <div
+                class="center-reticle absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center opacity-80">
+                <div id="reticle-ring"
+                    class="w-64 h-64 border border-red-500/50 rounded-full flex items-center justify-center relative transition-colors duration-200">
+                    <div class="w-0.5 h-6 bg-red-500 absolute top-0"></div>
+                    <div class="w-0.5 h-6 bg-red-500 absolute bottom-0"></div>
+                    <div class="w-6 h-0.5 bg-red-500 absolute left-0"></div>
+                    <div class="w-6 h-0.5 bg-red-500 absolute right-0"></div>
+                    <div class="w-1 h-1 bg-red-500 rounded-full shadow-[0_0_5px_red]"></div>
+                </div>
+                <div id="scan-label"
+                    class="mt-2 text-[10px] text-red-400 font-mono tracking-widest transition-colors duration-200">
+                    SYSTEM READY</div>
+                <div id="feedback-msg" class="text-xl font-bold text-red-500 mt-2 hidden animate-bounce">-10 PTS</div>
+            </div>
+
+            <!-- Bottom Left: Ammo -->
+            <div class="absolute bottom-4 left-4">
+                <div
+                    class="bg-slate-900/60 backdrop-blur border border-slate-700 p-2 rounded-lg text-center min-w-[80px]">
+                    <div class="text-[10px] text-slate-400 font-bold tracking-widest">AMMO</div>
+                    <div id="ammo-count" class="text-2xl font-mono font-bold text-blue-400">6/6</div>
+                </div>
+            </div>
+
+            <!-- Bottom Center: Fire -->
+            <button id="btn-fire"
+                class="absolute bottom-8 left-1/2 -translate-x-1/2 w-20 h-20 bg-red-500/20 border-2 border-red-500 rounded-full flex items-center justify-center pointer-events-auto active:scale-95 transition-transform shadow-[0_0_30px_rgba(239,68,68,0.4)]">
+                <div class="w-16 h-16 bg-red-500/80 rounded-full"></div>
+            </button>
+
+            <!-- Bottom Right: Team -->
+            <div class="absolute bottom-4 right-4 text-right">
+                <div class="bg-slate-900/60 backdrop-blur border border-slate-700 p-2 rounded-lg min-w-[100px]">
+                    <div class="text-[10px] text-slate-400 font-bold tracking-widest">TEAM</div>
+                    <div id="my-team" class="text-xl font-bold text-white uppercase truncate">BLUE</div>
+                    <div id="my-id-display" class="text-[10px] text-slate-500 truncate">ID: ...</div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Keep client logic -->
+    <script src="js/client.js?v=10"></script>
+</body>
+
+</html>

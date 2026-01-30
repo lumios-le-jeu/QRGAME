@@ -37,23 +37,47 @@ io.on('connection', (socket) => {
     // --- CREATE GAME ---
     socket.on('createGame', (data, callback) => {
         const code = generateCode();
-        const duration = (parseInt(data.duration) || 15) * 60 * 1000; // Minutes to ms
+
+        let durationMinutes = parseInt(data.duration) || 15;
+        let teamsCount = parseInt(data.teams) || 2;
+        let maxPlayers = parseInt(data.maxPlayers) || 5;
+        const resIcon = data.reservationCode ? "🔒" : "🆓";
+
+        // LIMITS ENFORCEMENT
+        // Free Default: 2 Teams, 5 Players, 30 Minutes
+        const isStandardLimits = (teamsCount <= 2 && maxPlayers <= 5 && durationMinutes <= 30);
+
+        if (!isStandardLimits) {
+            const validCodes = ['COMMANDO_QR', 'GENERAL_QR'];
+            if (!data.reservationCode || !validCodes.includes(data.reservationCode.toUpperCase())) {
+                // Reject creation if limits exceeded without valid code
+                callback({
+                    success: false,
+                    error: "LIMITES DÉPASSÉES",
+                    msg: "Pour dépasser 2 Équipes, 5 Joueurs ou 30 Minutes, un CODE DE RÉSERVATION est requis (Pack Commando/Général)."
+                });
+                return;
+            }
+        }
+
+        const duration = durationMinutes * 60 * 1000; // Minutes to ms
 
         games[code] = {
             id: code,
             name: data.name,
-            teamsCount: parseInt(data.teams),
+            teamsCount: teamsCount,
+            maxPlayers: maxPlayers,
             duration: duration,
             startTime: Date.now(),
             endTime: Date.now() + duration,
             lat: data.lat,
             lon: data.lon,
             players: {},
-            zones: {}, // { 200: 'red', 201: 'blue' }
+            zones: {},
             status: 'waiting'
         };
 
-        console.log(`Game created: ${code} (Duration: ${data.duration || 15}m) @ [${data.lat}, ${data.lon}]`);
+        console.log(`Game created: ${code} [${resIcon}] (T:${teamsCount}, P:${maxPlayers}, ${durationMinutes}m)`);
         callback({ success: true, gameCode: code });
     });
 
@@ -119,6 +143,14 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // CHECK MAX PLAYERS
+        const currentPlayers = Object.keys(game.players).length;
+        const limitPlayers = game.maxPlayers || 5;
+        if (currentPlayers >= limitPlayers) {
+            socket.emit('error', `SERVER FULL (${currentPlayers}/${limitPlayers} Joueurs Max)`);
+            return;
+        }
+
         game.players[socket.id] = {
             id: socket.id,
             username: data.username,
@@ -147,6 +179,32 @@ io.on('connection', (socket) => {
             startTime: game.startTime,
             endTime: game.endTime
         });
+    });
+
+    // --- DISCOVER NEARBY GAMES ---
+    socket.on('req_nearby_games', (coords) => {
+        if (!coords || !coords.lat || !coords.lon) {
+            socket.emit('res_nearby_games', []);
+            return;
+        }
+
+        const nearby = [];
+        Object.values(games).forEach(g => {
+            if (g.status === 'ended') return;
+            const dist = getDistanceInKm(g.lat, g.lon, coords.lat, coords.lon);
+            if (dist < 20.0) { // 20km Radius
+                nearby.push({
+                    name: g.name,
+                    code: g.id,
+                    dist: dist,
+                    count: Object.keys(g.players || {}).length,
+                    status: g.status
+                });
+            }
+        });
+
+        nearby.sort((a, b) => a.dist - b.dist);
+        socket.emit('res_nearby_games', nearby.slice(0, 5));
     });
 
     socket.on('disconnect', () => {

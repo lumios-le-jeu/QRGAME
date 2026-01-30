@@ -49,6 +49,60 @@ document.getElementById('btn-goto-create').addEventListener('click', () => {
 // BACK BUTTONS
 document.getElementById('btn-back-home-1').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-back-home-2').addEventListener('click', () => showScreen('home'));
+// SCAN NEARBY (Home)
+const scanBtn = document.getElementById('btn-scan-games');
+if (scanBtn) {
+    scanBtn.addEventListener('click', async () => {
+        scanBtn.innerText = 'Scanning...';
+        try {
+            const coords = await getCurrentLocation();
+            socket.emit('req_nearby_games', coords);
+        } catch (err) {
+            console.error(err);
+            alert("Impossible de scanner : GPS requis.");
+            scanBtn.innerText = 'REFRESH';
+            document.getElementById('nearby-results').innerHTML = '<small style="color:red">GPS Inaccessible</small>';
+        }
+    });
+}
+
+socket.on('res_nearby_games', (games) => {
+    const list = document.getElementById('nearby-results');
+    const scanBtn = document.getElementById('btn-scan-games');
+    if (scanBtn) scanBtn.innerText = 'REFRESH';
+
+    if (!games || games.length === 0) {
+        list.innerHTML = '<small>Aucune partie trouvée à -20km.</small>';
+        return;
+    }
+
+    list.innerHTML = '';
+    games.forEach(g => {
+        const div = document.createElement('div');
+        div.className = 'lobby-item';
+        div.style.marginBottom = '5px';
+        div.style.padding = '5px';
+        div.style.background = 'rgba(255,255,255,0.1)';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+
+        div.innerHTML = `
+            <div>
+                <strong style="color:var(--neon-cyan)">${g.name || 'Mission'}</strong>
+                <br>
+                <small>${g.dist.toFixed(2)} km | ${g.count} Joueurs</small>
+            </div>
+            <button class="btn primary" style="padding:4px 8px; font-size:0.8rem;" onclick="joinFromLobby('${g.code}')">JOIN</button>
+        `;
+        list.appendChild(div);
+    });
+});
+
+window.joinFromLobby = (code) => {
+    showScreen('join');
+    document.getElementById('join-code').value = code;
+};
 
 // GPS Helper
 const getCurrentLocation = () => {
@@ -113,6 +167,22 @@ document.getElementById('btn-confirm-join').addEventListener('click', async (e) 
 
 // CONFIRM CREATE
 // CONFIRM CREATE
+// CHECK LIMITS FUNCTION (Global)
+window.checkLimits = () => {
+    const teams = parseInt(document.getElementById('create-teams').value) || 2;
+    const maxP = parseInt(document.getElementById('create-max-players').value) || 2;
+    const duration = parseInt(document.getElementById('create-duration').value) || 15;
+    const resSection = document.getElementById('reservation-section');
+
+    // Limits: Teams > 2 OR Players > 5 OR Duration > 30min
+    if (teams > 2 || maxP > 5 || duration > 30) {
+        resSection.classList.remove('hidden');
+    } else {
+        resSection.classList.add('hidden');
+    }
+};
+
+// CONFIRM CREATE
 document.getElementById('btn-confirm-create').addEventListener('click', async (e) => {
     const btn = e.target;
     btn.disabled = true;
@@ -122,16 +192,28 @@ document.getElementById('btn-confirm-create').addEventListener('click', async (e
     await requestSensors();
 
     const name = document.getElementById('create-name').value;
-    const teams = document.getElementById('create-teams').value;
-    const duration = document.getElementById('create-duration').value;
+    const teams = parseInt(document.getElementById('create-teams').value);
+    const maxPlayers = parseInt(document.getElementById('create-max-players').value);
+    const duration = parseInt(document.getElementById('create-duration').value);
+    const resCode = document.getElementById('create-res-code').value;
+
+    // Client-side Validation of "Code Required" logic to warn user before server rejects
+    if ((teams > 2 || maxPlayers > 5 || duration > 30) && (!resCode || resCode.trim() === "")) {
+        alert("LIMITES DÉPASSÉES (Pack Gratuit)\n\nVous avez configuré:\n- " + teams + " Équipes (>2)\n- " + maxPlayers + " Joueurs (>5)\n- " + duration + " Min (>30)\n\nVeuillez entrer un CODE DE RÉSERVATION valide ou réduire les paramètres.");
+        btn.disabled = false;
+        btn.innerText = "Créer la Partie";
+        return;
+    }
 
     try {
-        // alert("Acquisition position GPS..."); // Removed alert to rely on button text
         const coords = await getCurrentLocation();
         const isPlayer = document.getElementById('create-is-player').checked;
 
         // Admin creates game
-        socket.emit('createGame', { name, teams, duration, lat: coords.lat, lon: coords.lon }, (response) => {
+        socket.emit('createGame', {
+            name, teams, maxPlayers, duration, reservationCode: resCode,
+            lat: coords.lat, lon: coords.lon
+        }, (response) => {
             if (response.success) {
                 alert("Partie créée ! Code: " + response.gameCode);
 
@@ -143,6 +225,7 @@ document.getElementById('btn-confirm-create').addEventListener('click', async (e
                     enterGame('Admin', 'spectator', response.gameCode, coords);
                 }
             } else {
+                alert("ERREUR CRÉATION: " + (response.msg || response.error));
                 btn.disabled = false;
                 btn.innerText = "Créer la Partie";
             }
@@ -283,35 +366,44 @@ function aimLoop() {
             const markers = detector.detect(imageData);
 
             // Visual feedback
-            const reticle = document.querySelector('.reticle-circle');
-            const scanLabel = document.querySelector('.scan-label');
+            const reticle = document.getElementById('reticle-ring');
+            const scanLabel = document.getElementById('scan-label');
 
             if (markers && markers.length > 0) {
                 // LOCK ON
-                lockedTargetId = markers[0].id;
+                const id = markers[0].id;
+                lockedTargetId = id;
 
+                // Force Green Style
                 if (reticle) {
-                    reticle.style.borderColor = "#00ff00"; // Green
-                    reticle.style.boxShadow = "0 0 15px #00ff00";
+                    reticle.style.borderColor = "#00ff00";
+                    reticle.style.boxShadow = "0 0 25px #00ff00, inset 0 0 10px #00ff00"; // Outer + Inner glow
+                    reticle.style.borderWidth = "2px"; // Thicker
                 }
                 if (scanLabel) {
-                    scanLabel.innerText = "TARGET LOCKED: " + lockedTargetId;
+                    scanLabel.innerText = "LOCKED [ID:" + id + "]";
                     scanLabel.style.color = "#00ff00";
+                    scanLabel.style.textShadow = "0 0 5px #00ff00";
                 }
             } else {
                 // NO TARGET
                 lockedTargetId = null;
 
                 if (reticle) {
-                    reticle.style.borderColor = "var(--primary-red)";
-                    reticle.style.boxShadow = "0 0 10px var(--primary-red)";
+                    // Restore Red style (matching app.html default)
+                    reticle.style.borderColor = "rgba(239, 68, 68, 0.5)";
+                    reticle.style.boxShadow = "none";
+                    reticle.style.borderWidth = "1px";
                 }
                 if (scanLabel) {
-                    scanLabel.innerText = "SCANNING...";
-                    scanLabel.style.color = "var(--primary-red)";
+                    scanLabel.innerText = "SYSTEM READY";
+                    scanLabel.style.color = "#f87171"; // Red-400
+                    scanLabel.style.textShadow = "none";
                 }
             }
-        } catch (e) { }
+        } catch (e) {
+            console.error("Detection Error:", e);
+        }
     }
     requestAnimationFrame(aimLoop);
 }
@@ -746,10 +838,10 @@ function updateTeamDisplay(team) {
 }
 
 function updateAmmoDisplay() {
-    const el = document.querySelector('.ammo-display .value');
+    const el = document.getElementById('ammo-count');
     if (el) {
         el.innerText = ammo + "/" + MAX_AMMO;
         if (ammo === 0) el.style.color = 'red';
-        else el.style.color = 'white';
+        else el.style.color = '#60a5fa'; // Blue-400 equivalent for "normal" state
     }
 }

@@ -3,172 +3,592 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>QRSHOT - Battle Arena</title>
-    <link rel="stylesheet" href="css/style.css?v=6">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap"
-        rel="stylesheet">
-    <script src="/socket.io/socket.io.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QRSHOT - Le Jeu de Tir Stratégique en Réalité</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0f172a',
+                            primary: '#3b82f6',
+                            accent: '#f59e0b',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        /* Force Minimap Size Override */
-        .minimap-container {
-            width: 150px !important;
-            height: 150px !important;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .hero-bg {
+            background-color: #0f172a;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.1) 0px, transparent 50%);
+        }
+
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+        }
+
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
     </style>
-    <!-- Aruco Libs -->
-    <script src="js/lib/cv.js"></script>
-    <script src="js/lib/aruco.js"></script>
-    <script src="js/lib/svd.js"></script>
 </head>
 
-<body>
+<body class="bg-slate-900 text-slate-200 antialiased">
 
-    <!-- PAGE: ACCUEIL -->
-    <section id="page-home" class="screen active">
-        <div class="glass-panel">
-            <h1 class="glitch-text">QRSHOT</h1>
-            <p class="subtitle">TACTICAL AR BATTLE</p>
+    <!-- Navigation -->
+    <nav class="fixed w-full z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">
+                        <i class="fa-solid fa-crosshairs"></i>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight text-white">QRSHOT</span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#concept"
+                            class="hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Le
+                            Concept</a>
+                        <a href="#how-it-works"
+                            class="hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Comment
+                            Jouer</a>
+                        <a href="#pricing"
+                            class="hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Tarifs</a>
+                        <a href="#rules"
+                            class="hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Règles</a>
+                        <a href="app.html"
+                            class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-md text-sm font-bold text-white transition-colors">LANCER
+                            APP</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-btn" class="text-slate-400 hover:text-white focus:outline-none">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-slate-800 border-b border-slate-700">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#concept" class="block hover:bg-slate-700 px-3 py-2 rounded-md text-base font-medium">Le
+                    Concept</a>
+                <a href="#how-it-works"
+                    class="block hover:bg-slate-700 px-3 py-2 rounded-md text-base font-medium">Comment Jouer</a>
+                <a href="#pricing"
+                    class="block hover:bg-slate-700 px-3 py-2 rounded-md text-base font-medium">Tarifs</a>
+                <a href="app.html" class="block bg-blue-600 px-3 py-2 rounded-md text-base font-bold text-white">LANCER
+                    APP</a>
+            </div>
+        </div>
+    </nav>
 
-            <div class="menu-actions">
-                <button id="btn-goto-join" class="btn primary">REJOINDRE</button>
-                <button id="btn-goto-create" class="btn secondary">CRÉER PARTIE</button>
+    <!-- Hero Section -->
+    <section class="hero-bg pt-32 pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        <div class="max-w-7xl mx-auto text-center relative z-10">
+            <div
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-900/30 border border-blue-500/30 text-blue-300 text-xs font-semibold mb-6 backdrop-blur-sm">
+                <span class="w-2 h-2 rounded-full bg-blue-500 pulse-dot"></span>
+                JEU EN TEMPS RÉEL
+            </div>
+            <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 text-white">
+                Capture. Tire. <span class="text-blue-500">Domine.</span>
+            </h1>
+            <p class="mt-4 max-w-2xl mx-auto text-xl text-slate-400 mb-10">
+                QRSHOT transforme votre ville en terrain de jeu. Capturez des zones stratégiques, scannez vos
+                adversaires et marquez des points pour votre équipe.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="app.html"
+                    class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/50 transition-all transform hover:scale-105 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-play"></i> Rejoindre un Combat
+                </a>
+                <a href="#how-it-works"
+                    class="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg border border-slate-700 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-book-open"></i> Voir le Fonctionnement
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Concept Section -->
+    <section id="concept" class="py-20 bg-slate-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-white sm:text-4xl">C'est quoi QRSHOT ?</h2>
+                <p class="mt-4 text-lg text-slate-400">Un mélange explosif de stratégie, d'action et de
+                    course-poursuite dans votre ville.</p>
             </div>
 
-            <div id="lobbies-list">
-                <h3>PARTIES À PROXIMITÉ</h3>
-                <div class="lobby-item">
-                    <span>Parc de la Citadelle</span>
-                    <span class="status">EN COURS</span>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Card 1 -->
+                <div
+                    class="bg-slate-800 p-8 rounded-2xl border border-slate-700 card-hover transition-all duration-300">
+                    <div class="mb-6 overflow-hidden rounded-xl">
+                        <img src="img/qr_action.png" alt="Combat QR"
+                            class="w-full h-48 object-cover transform hover:scale-110 transition-transform duration-500">
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Le QR Code comme Arme</h3>
+                    <p class="text-slate-400">Chaque joueur porte un QR Code (A4 ou T-shirt). Pour marquer, il suffit de
+                        scanner celui de l'adversaire avec l'application.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div
+                    class="bg-slate-800 p-8 rounded-2xl border border-slate-700 card-hover transition-all duration-300">
+                    <div class="mb-6 overflow-hidden rounded-xl">
+                        <img src="img/zones_strategic.png" alt="Zones Stratégiques"
+                            class="w-full h-48 object-cover transform hover:scale-110 transition-transform duration-500">
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Zones Stratégiques</h3>
+                    <p class="text-slate-400">Le terrain est divisé en zones (A, B, C). Plus vous avez de joueurs dans
+                        une zone, plus vous marquez de points.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div
+                    class="bg-slate-800 p-8 rounded-2xl border border-slate-700 card-hover transition-all duration-300">
+                    <div class="mb-6 overflow-hidden rounded-xl">
+                        <img src="img/team_vs_team.jpg" alt="Team vs Team"
+                            class="w-full h-48 object-cover transform hover:scale-110 transition-transform duration-500">
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Team vs Team</h3>
+                    <p class="text-slate-400">De 2 à 5 équipes s'affrontent. Idéal pour les team-buildings, les sorties
+                        entre amis ou la découverte d'une ville.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- PAGE: REJOINDRE -->
-    <section id="page-join" class="screen hidden">
-        <div class="glass-panel">
-            <h2>REJOINDRE</h2>
-            <div class="form-group">
-                <label>CODE D'ACCÈS</label>
-                <input type="text" id="join-code" placeholder="XXXX" maxlength="4">
-            </div>
-            <div class="form-group">
-                <label>PSEUDO</label>
-                <input type="text" id="join-pseudo" placeholder="Soldier76">
-            </div>
-            <div class="form-group">
-                <label>ÉQUIPE</label>
-                <select id="join-team"
-                    style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--neon-cyan); color: #fff; padding: 10px; font-family: var(--font-main); font-size: 1.2rem; border-radius: 4px; text-align: center;">
-                    <option value="auto">AUTOMATIQUE</option>
-                    <option value="red">ROUGE</option>
-                    <option value="blue">BLEU</option>
-                </select>
-            </div>
-            <div class="menu-actions">
-                <button id="btn-confirm-join" class="btn primary">GO</button>
-                <button id="btn-back-home-1" class="btn secondary">RETOUR</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- PAGE: CRÉER (ADMIN) -->
-    <section id="page-create" class="screen hidden">
-        <div class="glass-panel">
-            <h2>NOUVELLE MISSION</h2>
-            <div class="form-group">
-                <label>NOM DE PARTIE</label>
-                <input type="text" id="create-name" value="Mission Alpha">
-            </div>
-            <div class="form-group">
-                <label>NOMBRE D'ÉQUIPES</label>
-                <input type="number" id="create-teams" value="2" min="2" max="4">
-            </div>
-            <div class="form-group">
-                <label>DURÉE (Minutes)</label>
-                <input type="number" id="create-duration" value="15" min="1" max="60">
-            </div>
-            <div class="form-group" style="text-align:center; margin-top:10px;">
-                <label style="display:inline-block; margin-right:10px; cursor:pointer;"
-                    for="create-is-player">PARTICIPER (JOUEUR)</label>
-                <input type="checkbox" id="create-is-player" checked
-                    style="width:20px; height:20px; vertical-align:middle;">
-            </div>
-            <div class="menu-actions">
-                <button id="btn-confirm-create" class="btn primary">LANCER</button>
-                <button id="btn-back-home-2" class="btn secondary">RETOUR</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- PAGE: JEU (HUD) -->
-    <section id="page-game" class="screen hidden">
-        <!-- BACKGROUND CAMERA -->
-        <video id="camera-feed" autoplay playsinline muted></video>
-        <canvas id="camera-canvas" hidden></canvas> <!-- For processing QR -->
-
-        <!-- HUD LAYER -->
-        <div class="hud-overlay">
-
-            <!-- TOP LEFT: MINIMAP -->
-            <div id="mini-map" class="hud-item minimap-container"> <!-- ID added for JS access -->
-                <div class="minimap-grid"></div>
-                <!-- Radar line added via JS -->
+    <!-- How it Works -->
+    <section id="how-it-works" class="py-20 bg-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-white sm:text-4xl">Comment ça marche ?</h2>
+                <p class="mt-4 text-lg text-slate-400">Trois étapes pour devenir le maître du terrain.</p>
             </div>
 
-            <!-- GAME CODE (DISCREET) -->
-            <div id="game-code-display"
-                style="position:absolute; top:5px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.3); font-family:'Courier New', monospace; font-size:12px; pointer-events:none; z-index:5;">
-                CODE: ----
-            </div>
+            <!-- Action Visual -->
+            <div class="mb-16 max-w-4xl mx-auto">
+                <div
+                    class="bg-gradient-to-br from-red-600 via-purple-600 to-blue-600 rounded-3xl overflow-hidden shadow-2xl">
+                    <div class="h-96 flex items-center justify-center relative overflow-hidden">
+                        <!-- Animated background -->
+                        <div
+                            class="absolute inset-0 bg-gradient-to-r from-red-500/20 via-purple-500/20 to-blue-500/20 animate-pulse">
+                        </div>
 
-            <!-- TOP RIGHT: SCORE -->
-            <div class="hud-item score-board">
-                <div class="score-row red">
-                    <span class="team-label">RED</span>
-                    <span class="score-val" id="score-red">0</span>
-                </div>
-                <div class="score-row blue">
-                    <span class="team-label">BLUE</span>
-                    <span class="score-val" id="score-blue">0</span>
+                        <!-- Players in action illustration -->
+                        <div class="relative z-10 flex items-center justify-center gap-8 p-8">
+                            <!-- Player 1 (Red team) -->
+                            <div class="text-center transform -rotate-12 hover:scale-110 transition-transform">
+                                <div
+                                    class="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center mb-3 shadow-lg">
+                                    <i class="fa-solid fa-user text-white text-4xl"></i>
+                                </div>
+                                <div class="bg-white rounded-lg p-2 shadow-lg">
+                                    <i class="fa-solid fa-qrcode text-4xl text-gray-800"></i>
+                                </div>
+                                <p class="text-white font-bold mt-2 text-sm">Équipe Rouge</p>
+                            </div>
+
+                            <!-- Scan Effect -->
+                            <div class="flex flex-col items-center">
+                                <div class="text-yellow-300 animate-bounce">
+                                    <i class="fa-solid fa-mobile-screen-button text-6xl"></i>
+                                </div>
+                                <div class="mt-2 bg-white px-4 py-2 rounded-full shadow-lg">
+                                    <p class="text-sm font-bold text-gray-800">SCAN</p>
+                                </div>
+                                <div class="flex gap-1 mt-2">
+                                    <div class="w-1 h-8 bg-yellow-300 animate-pulse"></div>
+                                    <div class="w-1 h-8 bg-yellow-300 animate-pulse" style="animation-delay: 0.1s">
+                                    </div>
+                                    <div class="w-1 h-8 bg-yellow-300 animate-pulse" style="animation-delay: 0.2s">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Player 2 (Blue team) -->
+                            <div class="text-center transform rotate-12 hover:scale-110 transition-transform">
+                                <div
+                                    class="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center mb-3 shadow-lg">
+                                    <i class="fa-solid fa-user text-white text-4xl"></i>
+                                </div>
+                                <div class="bg-white rounded-lg p-2 shadow-lg">
+                                    <i class="fa-solid fa-qrcode text-4xl text-gray-800"></i>
+                                </div>
+                                <p class="text-white font-bold mt-2 text-sm">Équipe Bleue</p>
+                            </div>
+                        </div>
+
+                        <!-- Action Indicators -->
+                        <div
+                            class="absolute top-4 left-4 bg-green-500 text-white px-4 py-2 rounded-full font-bold text-sm shadow-lg animate-pulse">
+                            +10 POINTS
+                        </div>
+                        <div
+                            class="absolute bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-full font-bold text-sm shadow-lg animate-pulse">
+                            TOUCHÉ! -1 VIE
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/50 backdrop-blur-sm p-6 text-center border-t border-white/10">
+                        <p class="text-white text-lg font-semibold">⚡ Joueurs en pleine action - Scannez pour toucher !
+                        </p>
+                        <p class="text-slate-300 text-sm mt-2">Chaque scan réussi rapporte des points à votre équipe</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- CENTER: RETICLE -->
-            <div class="center-reticle">
-                <div class="reticle-circle"></div>
-                <div class="reticle-crosshair"></div>
-                <div class="scan-label">SYSTEM READY</div>
-                <div id="feedback-msg" class="feedback-msg hidden">-10 PTS</div>
+            <div class="relative">
+                <!-- Connecting Line (Desktop) -->
+                <div class="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-slate-700 -translate-y-1/2 z-0">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-12 relative z-10">
+                    <!-- Step 1 -->
+                    <div class="flex flex-col items-center text-center">
+                        <div
+                            class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-6 shadow-lg shadow-blue-900/50">
+                            1</div>
+                        <h3 class="text-xl font-bold mb-2 text-white">Rejoindre</h3>
+                        <p class="text-slate-400">Activez votre GPS et rejoignez une partie proche avec un code d'accès.
+                            Choisissez votre équipe.</p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="flex flex-col items-center text-center">
+                        <div
+                            class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-6 shadow-lg shadow-blue-900/50">
+                            2</div>
+                        <h3 class="text-xl font-bold mb-2 text-white">Jouer</h3>
+                        <p class="text-slate-400">Explorez la zone. Occupez les points stratégiques et scannez les QR
+                            codes des joueurs adverses.</p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="flex flex-col items-center text-center">
+                        <div
+                            class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-6 shadow-lg shadow-blue-900/50">
+                            3</div>
+                        <h3 class="text-xl font-bold mb-2 text-white">Gagner</h3>
+                        <p class="text-slate-400">Marquez plus de points que les autres équipes en capturant des zones
+                            et en éliminant vos ennemis.</p>
+                    </div>
+                </div>
             </div>
-
-            <!-- BOTTOM LEFT: AMMO -->
-            <div class="hud-item ammo-display">
-                <span class="label">AMMO</span>
-                <span class="value">6/6</span>
-            </div>
-
-            <!-- BOTTOM CENTER: FIRE BUTTON -->
-            <button id="btn-fire" class="fire-btn">
-                <div class="inner-circle"></div>
-            </button>
-
-            <!-- BOTTOM RIGHT: TEAM -->
-            <div class="hud-item team-display">
-                <span class="label">TEAM</span>
-                <span class="value" id="my-team">-</span>
-                <span id="my-id-display" style="display:block; font-size: 0.9em; margin-top: 5px; color: #aaa;">ID:
-                    -</span>
-            </div>
-
         </div>
     </section>
 
-    <script src="js/client.js?v=4"></script>
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-20 bg-slate-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-white sm:text-4xl">Choisissez Votre Pack</h2>
+                <p class="mt-4 text-lg text-slate-400">De la découverte rapide à l'expérience complète.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- Pack Le Bleu -->
+                <div class="bg-slate-800 rounded-2xl p-8 border border-slate-700 flex flex-col">
+                    <h3 class="text-xl font-bold text-white mb-2">Pack Le Bleu</h3>
+                    <p class="text-slate-400 text-sm mb-6">Pour tester le fun !</p>
+                    <div class="text-4xl font-bold text-white mb-6">Gratuit</div>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> 2 joueurs max</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> 5 minutes de jeu</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> Impression A4</li>
+                    </ul>
+                    <a href="app.html"
+                        class="block w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-colors text-center">JOUER
+                        GRATUIT</a>
+                </div>
+
+                <!-- Pack Commando -->
+                <div
+                    class="bg-slate-800 rounded-2xl p-8 border-2 border-blue-500 flex flex-col relative transform md:-translate-y-4 shadow-2xl shadow-blue-900/20">
+                    <div
+                        class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">
+                        POPULAIRE</div>
+                    <h3 class="text-xl font-bold text-white mb-2">Pack Commando</h3>
+                    <p class="text-slate-400 text-sm mb-6">Pour une après-midi inoubliable</p>
+                    <div class="text-4xl font-bold text-white mb-6">20€ <span
+                            class="text-lg font-normal text-slate-400">/ joueur</span></div>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> 60 minutes de jeu</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> Max 6 parties</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> QR Codes à imprimer soi-même</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> Support dédié</li>
+                    </ul>
+                    <a href="#reservation"
+                        class="block w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors shadow-lg shadow-blue-600/30 text-center">RÉSERVER</a>
+                </div>
+
+                <!-- Pack Général -->
+                <div class="bg-slate-800 rounded-2xl p-8 border border-slate-700 flex flex-col">
+                    <h3 class="text-xl font-bold text-white mb-2">Pack Général</h3>
+                    <p class="text-slate-400 text-sm mb-6">L'expérience ultime</p>
+                    <div class="text-4xl font-bold text-white mb-6">50€ <span
+                            class="text-lg font-normal text-slate-400">/ joueur</span></div>
+                    <ul class="space-y-3 mb-8 flex-grow">
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> 24h illimité</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> Nombre d'équipe illimité</li>
+                        <li class="flex items-center text-slate-300"><i
+                                class="fa-solid fa-check text-green-500 mr-2"></i> T-shirt perso + QR imprimés</li>
+                    </ul>
+                    <a href="#reservation"
+                        class="block w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-colors text-center">NOUS
+                        CONTACTER</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Rules Section -->
+    <section id="rules" class="py-20 bg-slate-800">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-white sm:text-4xl">Règles du Jeu</h2>
+            </div>
+
+            <div class="bg-slate-900 rounded-xl p-8 border border-slate-700">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-lg font-bold text-blue-400 mb-4"><i class="fa-solid fa-heart-pulse mr-2"></i>
+                            Survivre</h3>
+                        <p class="text-slate-300">
+                            <strong>3 Vies.</strong> Une fois touché, votre écran vire au rouge. Courez pour respawn !
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-400 mb-4"><i class="fa-solid fa-crosshairs mr-2"></i>
+                            Eliminer</h3>
+                        <p class="text-slate-300">
+                            Votre smartphone est votre arme. Visez, scannez le QR Code ennemi et marquez des points.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-green-400 mb-4"><i
+                                class="fa-solid fa-flag-checkered mr-2"></i> Dominer</h3>
+                        <p class="text-slate-300">
+                            Capturez physiquement les zones (A, B, C) pour faire grimper le score de votre équipe en
+                            continu.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-purple-400 mb-4"><i class="fa-solid fa-bell mr-2"></i>
+                            Fair-Play</h3>
+                        <p class="text-slate-300">
+                            L'arbitre c'est le serveur. Zéro triche, zéro litige. Juste du skill et de la stratégie.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Reservation Section (Added based on User Request) -->
+    <section id="reservation" class="py-20 bg-slate-900 border-t border-slate-800">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-white sm:text-4xl">Demande de Mission</h2>
+                <p class="mt-4 text-lg text-slate-400">Planifiez votre opération personnalisée ou commandez des packs.
+                </p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-8 border border-slate-700 shadow-xl">
+                <form id="missionForm" onsubmit="submitMission(event)">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label class="block text-slate-400 text-sm font-bold mb-2">OFFICIER DE LIAISON (NOM)</label>
+                            <input type="text" id="nom" placeholder="Ex: Lt. Shepard" required
+                                class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-sm font-bold mb-2">EMAIL DE CONTACT</label>
+                            <input type="email" id="email" placeholder="contact@squad.com" required
+                                class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-sm font-bold mb-2">NUMÉRO DE TÉLÉPHONE</label>
+                            <input type="tel" id="phone" placeholder="06 12 34 56 78" required
+                                class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-sm font-bold mb-2">DATE DE LA MISSION</label>
+                            <input type="date" id="date" required onclick="try{this.showPicker()}catch(e){}"
+                                style="color-scheme: dark;"
+                                class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="mb-6">
+                            <label class="block text-slate-400 text-sm font-bold mb-2">TYPE D'OPÉRATION</label>
+                            <select id="entreprise"
+                                class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                                <option value="PACK COMMANDO">PACK COMMANDO (20€/joueur)</option>
+                                <option value="PACK GENERAL">PACK GÉNÉRAL (50€/joueur)</option>
+                                <option value="PACK PERSO">PACK PERSONNALISÉ (Événement)</option>
+                            </select>
+                        </div>
+                        <div class="mb-6">
+                            <label class="block text-slate-400 text-sm font-bold mb-2">NOMBRE DE PARTICIPANTS</label>
+                            <input type="number" id="participants" placeholder="Ex: 10" min="2" required
+                                class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <label class="block text-slate-400 text-sm font-bold mb-2">DÉTAILS TACTIQUES</label>
+                        <textarea id="message" rows="4" placeholder="Précisions sur le lieu, requêtes spéciales..."
+                            class="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-blue-500 transition-colors"></textarea>
+                    </div>
+                    <button type="submit" id="submitBtn"
+                        class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/50 transition-all transform hover:scale-105">
+                        ENVOYER LA DEMANDE
+                    </button>
+                    <p id="formStatus" class="text-center mt-4 text-sm font-semibold hidden"></p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 py-12 border-t border-slate-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">
+                    <i class="fa-solid fa-crosshairs"></i>
+                </div>
+                <span class="font-bold text-xl text-white">QRSHOT</span>
+            </div>
+            <div class="text-slate-500 text-sm">
+                &copy; 2026 QRSHOT. Tous droits réservés.
+            </div>
+            <div class="flex space-x-6 mt-4 md:mt-0">
+                <a href="#" class="text-slate-400 hover:text-white"><i class="fa-brands fa-twitter"></i></a>
+                <a href="#" class="text-slate-400 hover:text-white"><i class="fa-brands fa-instagram"></i></a>
+                <a href="#" class="text-slate-400 hover:text-white"><i class="fa-brands fa-facebook"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const btn = document.getElementById('mobile-menu-btn');
+        const menu = document.getElementById('mobile-menu');
+
+        btn.addEventListener('click', () => {
+            menu.classList.toggle('hidden');
+        });
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                menu.classList.add('hidden'); // Close mobile menu on click
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        function submitMission(event) {
+            event.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const status = document.getElementById('formStatus');
+
+            // État chargement
+            const originalBtnContent = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> TRANSMISSION...';
+            btn.disabled = true;
+
+            const data = {
+                nom: document.getElementById('nom').value,
+                email: document.getElementById('email').value,
+                telephone: document.getElementById('phone').value,
+                date: document.getElementById('date').value,
+                participants: document.getElementById('participants').value,
+                entreprise: document.getElementById('entreprise').value,
+                message: document.getElementById('message').value
+            };
+
+            // URL DU SCRIPT - À REMPLACER PAR L'URL DE VOTRE SCRIPT DÉPLOYÉ
+            // URL DU SCRIPT - À REMPLACER PAR L'URL DE VOTRE SCRIPT DÉPLOYÉ
+            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX80OYLe-sRDuy8OzjorpnZ2UYXnlOyHqHNHyijBV-Mr7tPW5RQvaz-MGTBkkrDcKa/exec';
+
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+                .then(() => {
+                    // Succès (supposé car no-cors)
+                    status.innerHTML = '<i class="fa-solid fa-check text-green-500"></i> MISSION REÇUE. QG EN ATTENTE.';
+                    status.classList.remove('hidden', 'text-red-500');
+                    status.classList.add('text-green-500');
+
+                    btn.innerHTML = originalBtnContent;
+                    btn.disabled = false;
+                    document.getElementById('missionForm').reset();
+
+                    setTimeout(() => {
+                        status.classList.add('hidden');
+                    }, 5000);
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    status.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i> ÉCHEC TRANSMISSION. RÉESSAYER.';
+                    status.classList.remove('hidden', 'text-green-500');
+                    status.classList.add('text-red-500');
+
+                    btn.innerHTML = originalBtnContent;
+                    btn.disabled = false;
+                });
+        }
+    </script>
 </body>
 
 </html>

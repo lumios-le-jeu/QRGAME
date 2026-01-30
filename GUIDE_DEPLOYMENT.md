@@ -1,53 +1,83 @@
-# DÉPLOIEMENT SUR HOSTINGER (Node.js)
+# 🚀 GUIDE DE DÉPLOIEMENT (Windows & Mac Mini)
 
-Puisque vous avez un hébergement Hostinger (lumios-qc.com), voici comment mettre en ligne votre jeu **QRSHOT**.
-
-## PRÉ-REQUIS HOSTINGER
-1. Connectez-vous à votre **hPanel** (comme sur votre capture d'écran).
-2. Regardez dans le menu de gauche ou la barre de recherche:
-   - Cherchez **"Node.js"** ou **"![alt text](image.png)"**.
-   - *Note : Si vous ne trouvez pas cette option, votre plan (souvent le "Web Hosting" basique) ne supporte peut-être pas Node.js, mais seulement PHP. Dans ce cas, contactez le support ou utilisez la méthode "NGROK" ci-dessous.*
+Ce guide t'explique comment lancer le servuer de jeu et le tunnel Cloudflare sur ton PC actuel ou ton futur Mac Mini.
 
 ---
 
-## METHODE 1 : Si vous avez l'option "Node.js"
-
-1. **Créer l'application** :
-   - Cliquez sur **Setup Node.js App**.
-   - Version Node.js : Choisissez la plus récente recommandée (18.x ou 20.x).
-   - Mode : **Production**.
-   - Application Root : `qrshot` (cela créera un dossier).
-   - Application URL : `lumios-qc.com/qrshot` (ou un sous-domaine `jeu.lumios-qc.com`).
-   - Application Startup File : `server.js`.
-   - Cliquez sur **Create**.
-
-2. **Téléverser les fichiers** :
-   - Allez dans le **Gestionnaire de fichiers** (Files Manager).
-   - Naviguez dans le dossier `qrshot` nouvellement créé.
-   - Téléversez TOUS vos fichiers locaux (sauf `node_modules`).
-     - `server.js`
-     - `package.json`
-     - Dossier `public/`
-   - *Astuce : Zippez tout votre dossier local, uploadez le ZIP, et décompressez-le via le gestionnaire de fichiers.*
-
-3. **Installer les dépendances** :
-   - Retournez dans le menu **Node.js App**.
-   - Cliquez sur le bouton **"NPM Install"** (cela va lire votre `package.json` et installer `socket.io`, `express`, etc.).
-
-4. **Lancer** :
-   - Cliquez sur **Restart** (Redémarrer).
-   - Accédez à votre URL (ex: `lumios-qc.com/qrshot`). Le jeu devrait charger !
-   - *Important* : Le GPS et la Caméra nécessitent impérativement **HTTPS** (le cadenas 🔒). Hostinger active souvent SSL par défaut, vérifiez que vous êtes bien en `https://`.
+## 🔑 TON TOKEN CLOUDFLARE (SECRET)
+C'est la clé qui relie ton ordinateur à `fun.qrshotgame.fr`.  
+**Token :** 
+```text
+eyJhIjoiMjI3MzU3MTZhN2YzMDQ3ZGI5OGRkNWM2MzdhYzM0M2UiLCJ0IjoiY2E2MWYzYjgtMmY5YS00NjljLWIyN2ItOTYxMDE0NDQzYjc5IiwicyI6Ik1tRmxOalJqTWpJdFpXSTFaQzAwTnpKakxXSTVaV0V0T1RVek56ZzVaV05qWkdRMiJ9
+```
 
 ---
 
-## METHODE 2 : "NGROK" (Le plus simple pour tester tout de suite)
+## 🖥️ OPTION 1 : Sur ton PC WINDOWS (Actuel)
 
-Si votre Hostinger ne supporte pas Node.js ou si c'est trop compliqué pour l'instant, utilisez **ngrok** sur votre PC. Cela crée un tunnel temporaire vers votre PC.
+J'ai créé un script automatique pour toi.
 
-1. Téléchargez **ngrok** (gratuit) sur [ngrok.com](https://ngrok.com).
-2. Ouvrez un terminal sur votre PC.
-3. Lancez votre serveur jeu : `node server.js`
-4. Lancez ngrok sur le port 3000 : `ngrok http 3000`
-5. Copiez l'URL HTTPS fournie (ex: `https://a1b2-c3d4.ngrok-free.app`).
-6. Envoyez ce lien à vos amis. Ils pourront jouer depuis leur téléphone comme si c'était hébergé !
+### Méthode "En un clic" :
+1. J'ai créé un fichier `LANCER_JEU.bat` dans ce dossier.
+2. Double-clique simplement dessus.
+3. Une fenêtre noire va s'ouvrir et lancer :
+   - Le serveur Node.js (Port 3000)
+   - Le Tunnel Cloudflare
+4. **Ne ferme pas cette fenêtre** tant que tu veux que le jeu soit accessible.
+
+### Méthode Manuelle (Terminal) :
+Ouvre PowerShell dans le dossier et lance :
+```powershell
+# 1. Lancer le serveur
+Start-Process -NoNewWindow "node" "server.js"
+
+# 2. Lancer le tunnel
+cloudflared tunnel run --token <COPIER_LE_TOKEN_CI_DESSUS>
+```
+
+---
+
+## 🍎 OPTION 2 : Sur le MAC MINI (Serveur Dédié)
+
+Quand tu auras ton Mac, voici la procédure étape par étape.
+
+### 1. Installation des outils
+Ouvre le **Terminal** sur le Mac et installe Homebrew, Node et Cloudflared :
+
+```bash
+# 1. Installer Node.js (si pas déjà fait)
+brew install node
+
+# 2. Installer Cloudflared
+brew install cloudflare/cloudflare/cloudflared
+```
+
+### 2. Récupérer le code
+Copie tout le dossier `qrshot-node` sur le Mac (par clé USB ou Git).
+
+### 3. Lancer le jeu (Mode Test)
+Dans le terminal du Mac, va dans le dossier :
+```bash
+cd /chemin/vers/qrshot-node
+npm install  # Juste la première fois
+./start_mac.sh
+```
+*(J'ai créé le fichier `start_mac.sh` pour toi, n'oublie pas de le rendre exécutable avec `chmod +x start_mac.sh` avant :)*
+
+### 4. Lancer en "Mode Serveur" (24h/24 sans fenêtre ouverte)
+Pour que le Mac lance le jeu tout seul au démarrage :
+
+**A. Pour le serveur Node (avec PM2) :**
+```bash
+sudo npm install -g pm2
+pm2 start server.js --name "qrshot"
+pm2 startup
+pm2 save
+```
+
+**B. Pour le tunnel Cloudflare (Service) :**
+```bash
+sudo cloudflared service install <COPIER_LE_TOKEN_CI_DESSUS>
+```
+
+Et voilà ! Ton Mac sera un serveur de jeu autonome.
