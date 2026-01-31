@@ -352,34 +352,45 @@ async function startCamera() {
         const zoomSlider = document.getElementById('zoom-slider');
         const zoomDisplay = document.getElementById('zoom-level-display');
 
-        if (capabilities.zoom) {
-            // Native Zoom Supported!
-            console.log("Device supports native zoom:", capabilities.zoom);
+        // Always show Zoom Slider (Native or Digital Fallback)
+        zoomContainer.classList.remove('hidden');
+        zoomContainer.classList.add('flex');
 
-            // Configure Slider
+        let hasNativeZoom = false;
+
+        if (capabilities.zoom) {
+            // Native Zoom Supported
+            hasNativeZoom = true;
+            console.log("Native zoom supported");
             zoomSlider.min = capabilities.zoom.min;
             zoomSlider.max = capabilities.zoom.max;
             zoomSlider.step = capabilities.zoom.step || 0.1;
             zoomSlider.value = settings.zoom || 1;
+        } else {
+            // Digital Zoom Fallback (CSS)
+            console.log("Native zoom missing, using Digital Zoom");
+            zoomSlider.min = 1;
+            zoomSlider.max = 5; // Limit digital zoom to 5x to avoid pixels
+            zoomSlider.step = 0.1;
+            zoomSlider.value = 1;
+        }
 
-            zoomContainer.classList.remove('hidden');
-            zoomContainer.classList.add('flex');
+        zoomSlider.addEventListener('input', async (e) => {
+            const zoomVal = parseFloat(e.target.value);
+            zoomDisplay.innerText = zoomVal.toFixed(1) + "x";
 
-            zoomSlider.addEventListener('input', async (e) => {
-                const zoomVal = parseFloat(e.target.value);
-                zoomDisplay.innerText = zoomVal.toFixed(1) + "x";
-
+            if (hasNativeZoom) {
                 try {
-                    await track.applyConstraints({
-                        advanced: [{ zoom: zoomVal }]
-                    });
+                    await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
                 } catch (err) {
                     console.error("Zoom failed:", err);
                 }
-            });
-        } else {
-            console.warn("Native zoom not supported on this device.");
-        }
+            } else {
+                // Apply Digital Zoom via CSS
+                video.style.transform = `scale(${zoomVal})`;
+                // Note: Detection still runs on full frame, but aiming is visually zoomed.
+            }
+        });
 
         // Init Aruco Detector
         if (typeof AR !== 'undefined') {
