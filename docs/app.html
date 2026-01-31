@@ -309,6 +309,18 @@
                 </div>
             </div>
 
+            <!-- Right: Sniper Zoom Slider (Hidden by default, shown if supported) -->
+            <div id="zoom-container"
+                class="hidden absolute top-1/2 right-4 -translate-y-1/2 flex-col items-center gap-2 z-50 pointer-events-auto">
+                <i class="fa-solid fa-plus text-xs text-blue-400"></i>
+                <div class="h-48 w-8 bg-black/40 border border-blue-500/30 rounded-full p-1 backdrop-blur-sm relative">
+                    <input type="range" id="zoom-slider" min="1" max="10" step="0.1" value="1"
+                        class="w-48 h-6 origin-center -rotate-90 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 appearance-none bg-transparent cursor-pointer">
+                </div>
+                <i class="fa-solid fa-minus text-xs text-blue-400"></i>
+                <div id="zoom-level-display" class="text-[10px] font-mono text-blue-400 font-bold">1.0x</div>
+            </div>
+
             <!-- Center: Reticle -->
             <div
                 class="center-reticle absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center opacity-80">

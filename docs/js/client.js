@@ -343,6 +343,44 @@ async function startCamera() {
         video.play();
         isCameraReady = true;
 
+        // --- ZOOM LOGIC ---
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+        const settings = track.getSettings ? track.getSettings() : {};
+
+        const zoomContainer = document.getElementById('zoom-container');
+        const zoomSlider = document.getElementById('zoom-slider');
+        const zoomDisplay = document.getElementById('zoom-level-display');
+
+        if (capabilities.zoom) {
+            // Native Zoom Supported!
+            console.log("Device supports native zoom:", capabilities.zoom);
+
+            // Configure Slider
+            zoomSlider.min = capabilities.zoom.min;
+            zoomSlider.max = capabilities.zoom.max;
+            zoomSlider.step = capabilities.zoom.step || 0.1;
+            zoomSlider.value = settings.zoom || 1;
+
+            zoomContainer.classList.remove('hidden');
+            zoomContainer.classList.add('flex');
+
+            zoomSlider.addEventListener('input', async (e) => {
+                const zoomVal = parseFloat(e.target.value);
+                zoomDisplay.innerText = zoomVal.toFixed(1) + "x";
+
+                try {
+                    await track.applyConstraints({
+                        advanced: [{ zoom: zoomVal }]
+                    });
+                } catch (err) {
+                    console.error("Zoom failed:", err);
+                }
+            });
+        } else {
+            console.warn("Native zoom not supported on this device.");
+        }
+
         // Init Aruco Detector
         if (typeof AR !== 'undefined') {
             detector = new AR.Detector();
