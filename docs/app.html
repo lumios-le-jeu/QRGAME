@@ -309,16 +309,103 @@
                 </div>
             </div>
 
-            <!-- Right: Sniper Zoom Slider (Hidden by default, shown if supported) -->
+            <!-- Right: Sniper Zoom Slider (styled like the reference) -->
+            <style>
+                /* Custom Range Slider Styling */
+                .sniper-slider-container {
+                    position: relative;
+                    width: 60px;
+                    height: 240px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                /* The Ruler/Track Background */
+                .sniper-track {
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    width: 40px;
+                    background: linear-gradient(to right, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+                    border: 1px solid rgba(59, 130, 246, 0.3);
+                    border-radius: 20px;
+                    box-shadow: inset 0 0 10px #000;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    padding: 10px 0;
+                    pointer-events: none;
+                }
+
+                /* Ruler Marks generated via repeated gradient */
+                .sniper-ruler-marks {
+                    position: absolute;
+                    right: 5px;
+                    top: 15px;
+                    bottom: 15px;
+                    width: 10px;
+                    background-image: repeating-linear-gradient(to bottom,
+                            rgba(59, 130, 246, 0.5) 0px,
+                            rgba(59, 130, 246, 0.5) 1px,
+                            transparent 1px,
+                            transparent 10px);
+                }
+
+                /* The Input (Rotated to be vertical) */
+                .sniper-range {
+                    -webkit-appearance: none;
+                    width: 200px;
+                    /* Height of the slider (since it's rotated) */
+                    height: 40px;
+                    background: transparent;
+                    transform: rotate(-90deg);
+                    cursor: pointer;
+                    outline: none;
+                    z-index: 2;
+                }
+
+                /* Thumb (The glowing button) */
+                .sniper-range::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 50%;
+                    background: radial-gradient(circle at 30% 30%, #e0f2fe, #0ea5e9, #0284c7);
+                    box-shadow: 0 0 15px #0ea5e9, inset 0 0 5px white;
+                    border: 2px solid #0f172a;
+                    cursor: pointer;
+                    margin-top: -14px;
+                    /* Adjust vertical centering */
+                    position: relative;
+                    z-index: 3;
+                }
+
+                /* Track (Invisible, handled by .sniper-track) */
+                .sniper-range::-webkit-slider-runnable-track {
+                    width: 100%;
+                    height: 6px;
+                    background: rgba(0, 0, 0, 0.5);
+                    border-radius: 3px;
+                    border: 1px solid rgba(59, 130, 246, 0.3);
+                }
+            </style>
+
             <div id="zoom-container"
-                class="hidden absolute top-1/2 right-4 -translate-y-1/2 flex-col items-center gap-2 z-50 pointer-events-auto">
-                <i class="fa-solid fa-plus text-xs text-blue-400"></i>
-                <div class="h-48 w-8 bg-black/40 border border-blue-500/30 rounded-full p-1 backdrop-blur-sm relative">
-                    <input type="range" id="zoom-slider" min="1" max="10" step="0.1" value="1"
-                        class="w-48 h-6 origin-center -rotate-90 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 appearance-none bg-transparent cursor-pointer">
+                class="hidden absolute top-1/2 right-0 -translate-y-1/2 flex-col items-center gap-2 z-50 pointer-events-auto pr-2">
+
+                <div class="sniper-slider-container">
+                    <div class="sniper-track">
+                        <div class="sniper-ruler-marks"></div>
+                    </div>
+                    <!-- Range Input -->
+                    <input type="range" id="zoom-slider" min="1" max="10" step="0.1" value="1" class="sniper-range">
                 </div>
-                <i class="fa-solid fa-minus text-xs text-blue-400"></i>
-                <div id="zoom-level-display" class="text-[10px] font-mono text-blue-400 font-bold">1.0x</div>
+
+                <div id="zoom-level-display"
+                    class="mt-2 text-xs font-mono text-cyan-400 font-black bg-black/60 px-2 py-1 rounded border border-cyan-500/30">
+                    1.0x</div>
             </div>
 
             <!-- Center: Reticle -->
