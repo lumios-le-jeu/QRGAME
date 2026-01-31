@@ -451,6 +451,7 @@ document.body.appendChild(hitOverlay);
 const hitSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2747/2747-preview.mp3'); // Glass break or impact
 
 fireBtn.addEventListener('click', (e) => {
+    e.preventDefault(); // Prevent accidental scrolling/focus
     fireBtn.style.transform = "translateX(-50%) scale(0.9)";
     setTimeout(() => fireBtn.style.transform = "translateX(-50%) scale(1)", 100);
 
@@ -856,4 +857,41 @@ function updateAmmoDisplay() {
         if (ammo === 0) el.style.color = 'red';
         else el.style.color = '#60a5fa'; // Blue-400 equivalent for "normal" state
     }
+}
+
+// --- UPGRADE MODAL LOGIC ---
+const upgradeModal = document.getElementById('modal-upgrade');
+const upgradeReasonEl = document.getElementById('upgrade-reason');
+const upgradeInputEl = document.getElementById('upgrade-code-input');
+const btnSubmitUpgradeEl = document.getElementById('btn-submit-upgrade');
+const btnCancelUpgradeEl = document.getElementById('btn-cancel-upgrade');
+
+if (socket) {
+    socket.on('askForCode', (data) => {
+        if (upgradeModal) {
+            upgradeModal.classList.remove('hidden');
+            if (upgradeReasonEl) upgradeReasonEl.innerText = data.msg || "Mise à niveau requise";
+            if (upgradeInputEl) upgradeInputEl.value = "";
+        }
+    });
+
+    socket.on('planUnlocked', (data) => {
+        if (upgradeModal) upgradeModal.classList.add('hidden');
+        if (typeof showFeedback === 'function') showFeedback(data.msg, "#4ade80");
+    });
+}
+
+if (btnSubmitUpgradeEl) {
+    btnSubmitUpgradeEl.addEventListener('click', () => {
+        const code = upgradeInputEl ? upgradeInputEl.value : "";
+        if (code && code.trim().length > 0) {
+            socket.emit('unlockPlan', { gameCode: activeGameCode, code: code });
+        }
+    });
+}
+
+if (btnCancelUpgradeEl) {
+    btnCancelUpgradeEl.addEventListener('click', () => {
+        if (upgradeModal) upgradeModal.classList.add('hidden');
+    });
 }
