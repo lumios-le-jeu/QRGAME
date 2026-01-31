@@ -328,14 +328,17 @@ function startGpsTracking() {
 
 // --- CAMERA & SCANNING ---
 let detector = null;
+let processingCanvas = null;
+let processingCtx = null;
 
 async function startCamera() {
     try {
+        console.log("Requesting Max Resolution (4K)...");
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: "environment",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 4096 }, // Request 4K
+                height: { ideal: 2160 }
             }
         });
         video.srcObject = stream;
@@ -396,6 +399,13 @@ async function startCamera() {
         if (typeof AR !== 'undefined') {
             detector = new AR.Detector();
             console.log("Aruco Detector Ready");
+
+            // Setup Processing Canvas (Small Square for Speed + Crop)
+            processingCanvas = document.createElement('canvas');
+            processingCanvas.width = 300; // Fixed size matching roughly the reticle (256px) + margin
+            processingCanvas.height = 300;
+            processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
+
             requestAnimationFrame(aimLoop); // Start aiming loop
         } else {
             console.error("AR Lib not loaded");
@@ -406,22 +416,72 @@ async function startCamera() {
     }
 }
 
+// SHARPEN FILTER KERNEL
+function applySharpen(imageData) {
+    const w = imageData.width;
+    const h = imageData.height;
+    const data = imageData.data;
+    const buff = new Uint8ClampedArray(data); // Copy for reading reference
+
+    // Simple 3x3 Sharpen Kernel
+    //  0 -1  0
+    // -1  5 -1
+    //  0 -1  0
+
+    for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+            const i = (y * w + x) * 4;
+
+            // RGB only
+            for (let c = 0; c < 3; c++) {
+                const val = 5 * buff[i + c]
+                    - buff[i + c - 4] // Left
+                    - buff[i + c + 4] // Right
+                    - buff[i + c - w * 4] // Top
+                    - buff[i + c + w * 4]; // Bottom
+
+                data[i + c] = val; // Clamp handled by Uint8ClampedArray view of data
+            }
+            // Alpha remains unchanged
+        }
+    }
+}
+
 // CONTINUOUS AIMING (For feedback & lock)
 function aimLoop() {
-    if (!isCameraReady || !detector) {
+    if (!isCameraReady || !detector || !processingCtx) {
         requestAnimationFrame(aimLoop);
         return;
     }
 
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        // Sync canvas to video prop
-        if (canvas.width !== video.videoWidth) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-        }
 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // 1. CROP CENTER (Sniper Logic)
+        // We only look at the center of the video frame, leveraging full resolution pixels.
+        // Don't downscale the whole 4K image!
+
+        const cropSize = Math.min(video.videoWidth, video.videoHeight) / 2; // Grab a generous center chunk (or tune to matches reticle)
+        // Actually, creating a fixed window matches the visual reticle better.
+        // Reticle is approx 256px wide physically on screen.
+        // If 4K video, 256px screen might map to 500-1000px video pixels depending on zoom.
+        // Let's grab a 400x400 region from the CENTER of the source video.
+
+        const sourceSize = 400; // Pixels from source to grab
+        const sx = (video.videoWidth - sourceSize) / 2;
+        const sy = (video.videoHeight - sourceSize) / 2;
+
+        // 2. PRE-PROCESSING (Grayscale + Contrast)
+        // Using Canvas Filter API for speed (GPU accelerated usually)
+        processingCtx.filter = "grayscale(100%) contrast(200%) brightness(120%)";
+
+        // Draw centered crop into smaller processing canvas
+        processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
+
+        // 3. READ PIXELS & SHARPEN
+        const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
+
+        // Apply CPU Sharpening (Fast on 300x300)
+        applySharpen(imageData);
 
         try {
             const markers = detector.detect(imageData);
