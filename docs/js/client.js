@@ -479,11 +479,24 @@ function aimLoop() {
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
-        // 2. PRE-PROCESSING (Grayscale + Soft Contrast)
-        processingCtx.filter = "grayscale(100%) brightness(110%) contrast(125%)";
+        // 2. PRE-PROCESSING (Raw Image for Debug)
+        // processingCtx.filter = "grayscale(100%) brightness(110%) contrast(125%)"; // Disabled for test
 
         // Draw centered crop into smaller processing canvas
         processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
+
+        // DEBUG: Show what the robot sees
+        if (!document.getElementById('debug-canvas')) {
+            processingCanvas.id = 'debug-canvas';
+            processingCanvas.style.position = 'absolute';
+            processingCanvas.style.bottom = '10px';
+            processingCanvas.style.left = '10px';
+            processingCanvas.style.width = '100px';
+            processingCanvas.style.height = '100px';
+            processingCanvas.style.border = '2px solid red';
+            processingCanvas.style.zIndex = '9999';
+            document.body.appendChild(processingCanvas);
+        }
 
         // 3. READ PIXELS & SHARPEN
         const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
