@@ -351,6 +351,14 @@ async function startCamera() {
         const capabilities = track.getCapabilities ? track.getCapabilities() : {};
         const settings = track.getSettings ? track.getSettings() : {};
 
+        // Focus Logic (Try to force continuous focus)
+        try {
+            await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+            console.log("Focus mode enabled");
+        } catch (err) {
+            console.warn("Focus mode not supported");
+        }
+
         const zoomContainer = document.getElementById('zoom-container');
         const zoomSlider = document.getElementById('zoom-slider');
         const zoomDisplay = document.getElementById('zoom-level-display');
@@ -400,10 +408,10 @@ async function startCamera() {
             detector = new AR.Detector();
             console.log("Aruco Detector Ready");
 
-            // Setup Processing Canvas (Small Square for Speed + Crop)
+            // Setup Processing Canvas (Optimized for performance/quality balance)
             processingCanvas = document.createElement('canvas');
-            processingCanvas.width = 300; // Fixed size matching roughly the reticle (256px) + margin
-            processingCanvas.height = 300;
+            processingCanvas.width = 800;
+            processingCanvas.height = 800;
             processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
 
             requestAnimationFrame(aimLoop); // Start aiming loop
@@ -466,13 +474,13 @@ function aimLoop() {
         // If 4K video, 256px screen might map to 500-1000px video pixels depending on zoom.
         // Let's grab a 400x400 region from the CENTER of the source video.
 
-        const sourceSize = 400; // Pixels from source to grab
+        // Reticle is huge (2500px on 4K). We grab a 1500px chunk to cover most of it while keeping performance check.
+        const sourceSize = 1500; // Pixels from source to grab
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
-        // 2. PRE-PROCESSING (Grayscale + Contrast)
-        // Using Canvas Filter API for speed (GPU accelerated usually)
-        processingCtx.filter = "grayscale(100%) contrast(200%) brightness(120%)";
+        // 2. PRE-PROCESSING (Grayscale + Soft Contrast)
+        processingCtx.filter = "grayscale(100%) brightness(110%) contrast(125%)";
 
         // Draw centered crop into smaller processing canvas
         processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
@@ -480,8 +488,8 @@ function aimLoop() {
         // 3. READ PIXELS & SHARPEN
         const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
 
-        // Apply CPU Sharpening (Fast on 300x300)
-        applySharpen(imageData);
+        // Apply CPU Sharpening (Disabled for speed, filters are enough)
+        // applySharpen(imageData);
 
         try {
             const markers = detector.detect(imageData);
