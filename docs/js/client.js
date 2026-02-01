@@ -485,17 +485,28 @@ function aimLoop() {
         // Draw centered crop into smaller processing canvas
         processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
 
-        // DEBUG: Show what the robot sees
-        if (!document.getElementById('debug-canvas')) {
+        // DEBUG: Show what the robot sees (Only when Zoomed)
+        let debugCanvas = document.getElementById('debug-canvas');
+        if (!debugCanvas) {
             processingCanvas.id = 'debug-canvas';
             processingCanvas.style.position = 'absolute';
             processingCanvas.style.bottom = '10px';
             processingCanvas.style.left = '10px';
-            processingCanvas.style.width = '100px';
-            processingCanvas.style.height = '100px';
+            processingCanvas.style.width = '120px'; // 120px for better visibility
+            processingCanvas.style.height = '120px';
             processingCanvas.style.border = '2px solid red';
             processingCanvas.style.zIndex = '9999';
+            processingCanvas.style.backgroundColor = 'black';
+            processingCanvas.style.display = 'none'; // Hidden by default
             document.body.appendChild(processingCanvas);
+            debugCanvas = processingCanvas;
+        }
+
+        // Toggle Visibility based on Zoom
+        if (typeof currentZoom !== 'undefined' && currentZoom > 1.0) {
+            debugCanvas.style.display = 'block';
+        } else {
+            debugCanvas.style.display = 'none';
         }
 
         // 3. READ PIXELS & SHARPEN
