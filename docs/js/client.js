@@ -116,17 +116,57 @@ window.joinFromLobby = (code) => {
     document.getElementById('join-code').value = code;
 };
 
+// Globals for Compass/GPS
+let currentHeading = 0;
+let myLat = 0;
+let myLon = 0;
+
 // GPS Helper
 const getCurrentLocation = () => {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) return reject(new Error("Combinaison GPS incompatible ou refusée"));
         navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            (pos) => {
+                myLat = pos.coords.latitude;
+                myLon = pos.coords.longitude;
+                resolve({ lat: myLat, lon: myLon });
+            },
             (err) => reject(err),
             { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
     });
 };
+
+function startLocationTracking() {
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition((pos) => {
+            myLat = pos.coords.latitude;
+            myLon = pos.coords.longitude;
+            // Also update heading if available from speed
+            if (pos.coords.heading && !isNaN(pos.coords.heading)) {
+                // only use GPS heading if moving fast enough? 
+                // actually device orientation is better for compass look
+            }
+        }, (err) => console.warn("GPS Watch Error", err), {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 5000
+        });
+    }
+
+    // Start Compass Tracking
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (event) => {
+            if (event.webkitCompassHeading) {
+                // iOS
+                currentHeading = event.webkitCompassHeading;
+            } else if (event.alpha) {
+                // Android (needs absolute correction normally, but simple alpha is start)
+                currentHeading = 360 - event.alpha;
+            }
+        }, true);
+    }
+}
 
 // iOS Compass Permission Helper
 async function requestSensors() {
@@ -296,38 +336,12 @@ function enterGame(username, team, gameCode, coords) {
 
     // We wait for server to confirm team via 'assignedId' or 'playerList' before updateTeamDisplay
     // But we can set a temporary "Waiting..." state
-    // Start REAL GPS Tracking
-    startGpsTracking();
+    // Start global location tracking if not already
+    startLocationTracking();
 }
 
-let myLat = 0;
-let myLon = 0;
-let currentHeading = 0;
-
-function startGpsTracking() {
-    if (navigator.geolocation) {
-        navigator.geolocation.watchPosition((pos) => {
-            myLat = pos.coords.latitude;
-            myLon = pos.coords.longitude;
-            socket.emit('updatePosition', { lat: myLat, lon: myLon });
-        }, (err) => console.error(err), {
-            enableHighAccuracy: true,
-            maximumAge: 1000
-        });
-    }
-
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', (event) => {
-            if (event.webkitCompassHeading) {
-                currentHeading = event.webkitCompassHeading;
-            } else if (event.alpha) {
-                currentHeading = 360 - event.alpha;
-            }
-            // Update Map Rotation in real-time
-            if (globalPlayers && globalPlayers.length > 0) updateMiniMap(globalPlayers);
-        });
-    }
-}
+// (Globals already defined above)
+// Camera & Scanning setup is next
 
 // --- CAMERA & SCANNING ---
 let detector = null;
