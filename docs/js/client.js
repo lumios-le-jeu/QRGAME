@@ -335,6 +335,70 @@ function enterGame(username, team, gameCode, coords) {
             .catch(console.error);
     }
 
+    // Request Fullscreen for Immersive/Kiosk feel
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => console.log("Fullscreen blocked", e));
+    }
+
+    // --- SCREEN LOCK (Kiosk Mode) ---
+    // Prevent accidental back navigation
+    history.pushState(null, document.title, location.href);
+    window.addEventListener('popstate', function (event) {
+        history.pushState(null, document.title, location.href);
+    });
+
+    // Add Padlock Icon
+    if (!document.getElementById('screen-lock-btn')) {
+        const lockBtn = document.createElement('div');
+        lockBtn.id = 'screen-lock-btn';
+        lockBtn.innerHTML = "🔒"; // Locked text
+        lockBtn.style.position = 'fixed';
+        lockBtn.style.top = '10px';
+        lockBtn.style.right = '10px';
+        lockBtn.style.fontSize = '24px';
+        lockBtn.style.zIndex = '10001'; // Above everything
+        lockBtn.style.background = 'rgba(0,0,0,0.5)';
+        lockBtn.style.borderRadius = '50%';
+        lockBtn.style.width = '40px';
+        lockBtn.style.height = '40px';
+        lockBtn.style.display = 'flex';
+        lockBtn.style.justifyContent = 'center';
+        lockBtn.style.alignItems = 'center';
+        lockBtn.style.cursor = 'pointer';
+        lockBtn.style.userSelect = 'none';
+        document.body.appendChild(lockBtn);
+
+        // Long Press Logic
+        let pressTimer;
+        const startPress = () => {
+            lockBtn.style.transform = "scale(0.9)";
+            lockBtn.style.background = 'rgba(255,0,0,0.5)'; // Red feedback
+            pressTimer = window.setTimeout(() => {
+                // UNLOCKED ACTION
+                const confirmExit = confirm("QUITTER LA MISSION ?");
+                if (confirmExit) {
+                    location.reload(); // Reload to quit
+                } else {
+                    lockBtn.innerHTML = "🔒";
+                    lockBtn.style.background = 'rgba(0,0,0,0.5)';
+                }
+            }, 2000); // 2 seconds
+        };
+        const cancelPress = () => {
+            lockBtn.style.transform = "scale(1)";
+            lockBtn.style.background = 'rgba(0,0,0,0.5)';
+            clearTimeout(pressTimer);
+        };
+
+        lockBtn.addEventListener('mousedown', startPress);
+        lockBtn.addEventListener('touchstart', startPress);
+        lockBtn.addEventListener('mouseup', cancelPress);
+        lockBtn.addEventListener('mouseleave', cancelPress);
+        lockBtn.addEventListener('touchend', cancelPress);
+    } else {
+        document.getElementById('screen-lock-btn').style.display = 'flex';
+    }
+
     startCamera();
     updateAmmoDisplay();
 
