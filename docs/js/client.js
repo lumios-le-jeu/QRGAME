@@ -483,9 +483,10 @@ function aimLoop() {
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
-        // 2. PRE-PROCESSING (Boost Contrast for Detection)
-        // Enable filters to make contours pop
-        processingCtx.filter = "grayscale(100%) brightness(130%) contrast(140%)";
+        // 2. PRE-PROCESSING (Raw Speed)
+        // Filters removed to prevent Android GPU Freeze.
+        // Aruco's internal Adaptive Threshold handles contrast well enough.
+        processingCtx.filter = "none";
 
         // Draw centered crop into smaller processing canvas
         processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
@@ -550,7 +551,15 @@ function aimLoop() {
             }
 
             // 3. Draw Valid Markers (Lime Green) - ID Decoded
+            // Visual feedback UI Elements (Must be selected inside loop or defined globally)
+            const reticle = document.getElementById('reticle-ring');
+            const scanLabel = document.getElementById('scan-label');
+
             if (markers && markers.length > 0) {
+                // LOCK ON
+                const id = markers[0].id;
+
+                // --- VISUALIZATION ON DEBUG CANVAS ---
                 processingCtx.lineWidth = 4;
                 for (let m of markers) {
                     const c = m.corners;
@@ -563,20 +572,12 @@ function aimLoop() {
                     processingCtx.closePath();
                     processingCtx.stroke();
 
-                    // Draw ID ID
+                    // Draw ID
                     processingCtx.fillStyle = "lime";
                     processingCtx.font = "bold 80px Arial";
                     processingCtx.fillText("ID:" + m.id, c[0].x, c[0].y);
                 }
-            }
-            // Visual feedback UI Elements (Must be selected inside loop or defined globally)
-            const reticle = document.getElementById('reticle-ring');
-            const scanLabel = document.getElementById('scan-label');
 
-            if (markers && markers.length > 0) {
-                // LOCK ON
-                const id = markers[0].id; // Take the first one (usually the biggest/closest)
-                // console.log("LOCK ON ID:", id); // Spammy but useful
                 lockedTargetId = id;
 
                 // Force Green Style
@@ -610,10 +611,10 @@ function aimLoop() {
             console.error("Detection Error:", e);
         }
     }
-    // Throttle loop to ~10 FPS (every 100ms) to unfreeze UI on weak CPU
+    // Throttle loop to ~5 FPS (every 200ms) to unfreeze UI on weak CPU
     setTimeout(() => {
         requestAnimationFrame(aimLoop);
-    }, 100);
+    }, 200);
 }
 
 // Global target lock
