@@ -568,7 +568,28 @@ function aimLoop() {
                     processingCtx.fillText("ID:" + m.id, c[0].x, c[0].y);
                 }
             }
-            else {
+            // Visual feedback UI Elements (Must be selected inside loop or defined globally)
+            const reticle = document.getElementById('reticle-ring');
+            const scanLabel = document.getElementById('scan-label');
+
+            if (markers && markers.length > 0) {
+                // LOCK ON
+                const id = markers[0].id; // Take the first one (usually the biggest/closest)
+                // console.log("LOCK ON ID:", id); // Spammy but useful
+                lockedTargetId = id;
+
+                // Force Green Style
+                if (reticle) {
+                    reticle.style.borderColor = "#00ff00";
+                    reticle.style.boxShadow = "0 0 25px #00ff00, inset 0 0 10px #00ff00"; // Outer + Inner glow
+                    reticle.style.borderWidth = "2px"; // Thicker
+                }
+                if (scanLabel) {
+                    scanLabel.innerText = "LOCKED [ID:" + id + "]";
+                    scanLabel.style.color = "#00ff00";
+                    scanLabel.style.textShadow = "0 0 5px #00ff00";
+                }
+            } else {
                 // NO TARGET
                 lockedTargetId = null;
 
