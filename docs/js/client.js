@@ -943,6 +943,26 @@ function updateMiniMap(players) {
         center.style.boxShadow = '0 0 4px black';
         center.style.zIndex = '5';
         map.appendChild(center);
+
+        // Distance Rings (12.5m, 25m, 50m diameters)
+        // Map Radius = 50m. Map Diameter = 100m.
+        // CSS Width = Diameter in meters (since 1m = 1%)
+        const diameters = [12.5, 25, 50];
+        diameters.forEach(d => {
+            const ring = document.createElement('div');
+            ring.className = 'radar-ring';
+            ring.style.position = 'absolute';
+            ring.style.top = '50%';
+            ring.style.left = '50%';
+            ring.style.transform = 'translate(-50%, -50%)';
+            ring.style.width = d + '%';
+            ring.style.height = d + '%';
+            ring.style.borderRadius = '50%';
+            ring.style.border = '1px dashed rgba(255, 255, 255, 0.3)';
+            ring.style.pointerEvents = 'none';
+            ring.style.boxSizing = 'border-box';
+            map.appendChild(ring);
+        });
     }
 
     // Dynamic North Marker (Update every frame)
