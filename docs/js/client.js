@@ -386,8 +386,12 @@ async function startCamera() {
             zoomSlider.value = 1;
         }
 
+        // Global variable for Debug Logic
+        window.currentZoom = 1.0;
+
         zoomSlider.addEventListener('input', async (e) => {
             const zoomVal = parseFloat(e.target.value);
+            window.currentZoom = zoomVal; // Update global state
             zoomDisplay.innerText = zoomVal.toFixed(1) + "x";
 
             if (hasNativeZoom) {
@@ -399,7 +403,6 @@ async function startCamera() {
             } else {
                 // Apply Digital Zoom via CSS
                 video.style.transform = `scale(${zoomVal})`;
-                // Note: Detection still runs on full frame, but aiming is visually zoomed.
             }
         });
 
