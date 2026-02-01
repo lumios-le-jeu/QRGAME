@@ -626,7 +626,7 @@ let lockedTargetId = null;
 
 // --- GAMEPLAY ---
 const shootSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2144/2144-preview.mp3'); // Loud Gunshot
-const emptySound = new Audio('https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3');
+const emptySound = new Audio('https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3'); // Pistol dry fire
 
 // HIT OVERLAY
 const hitOverlay = document.createElement('div');
@@ -661,8 +661,13 @@ fireBtn.addEventListener('click', (e) => {
 
     if (ammo <= 0) {
         showFeedback("NO AMMO - SCAN RELOAD (ID 0)", "#ffaa00");
+        // Play "Clic-Clic"
         emptySound.currentTime = 0;
         emptySound.play().catch(() => { });
+        setTimeout(() => {
+            emptySound.currentTime = 0;
+            emptySound.play().catch(() => { });
+        }, 150);
         return;
     }
 
