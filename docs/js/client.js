@@ -154,6 +154,9 @@ document.getElementById('btn-confirm-join').addEventListener('click', async (e) 
     // 1. Request Sensors (Must be first on click)
     await requestSensors();
 
+    // Ensure we start location tracking immediately
+    startLocationTracking();
+
     const code = document.getElementById('join-code').value.toUpperCase();
     const pseudo = document.getElementById('join-pseudo').value || 'Soldier';
     const team = document.getElementById('join-team').value;
@@ -1015,9 +1018,9 @@ function updateMiniMap(players) {
     }
 
     // 2. DRAW PLAYERS
+    const myIdDisplay = document.getElementById('my-id-display');
     players.forEach(p => {
-        const myIdDisplay = document.getElementById('my-id-display');
-        const isMe = (p.id === socket.id) || (myIdDisplay && parseInt(myIdDisplay.innerText) === p.markerId);
+        const isMe = (p.id === socket.id) || (myIdDisplay && parseInt(myIdDisplay.innerText.replace('ID: ', '')) === p.markerId);
 
         if (isMe) return;
 
