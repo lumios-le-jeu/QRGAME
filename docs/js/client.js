@@ -333,11 +333,11 @@ let processingCtx = null;
 
 async function startCamera() {
     try {
-        console.log("Requesting Max Resolution (4K)...");
+        console.log("Requesting ULTIMATE Resolution (4K+)...");
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: "environment",
-                width: { ideal: 4096 }, // Request 4K
+                width: { ideal: 4096 }, // Try to get the max possible
                 height: { ideal: 2160 }
             }
         });
@@ -482,8 +482,9 @@ function aimLoop() {
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
-        // 2. PRE-PROCESSING (Raw Image for Debug)
-        // processingCtx.filter = "grayscale(100%) brightness(110%) contrast(125%)"; // Disabled for test
+        // 2. PRE-PROCESSING (Boost Contrast for Detection)
+        // Enable filters to make contours pop
+        processingCtx.filter = "grayscale(100%) brightness(130%) contrast(140%)";
 
         // Draw centered crop into smaller processing canvas
         processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
@@ -495,7 +496,7 @@ function aimLoop() {
             processingCanvas.style.position = 'absolute';
             processingCanvas.style.bottom = '10px';
             processingCanvas.style.left = '10px';
-            processingCanvas.style.width = '120px'; // 120px for better visibility
+            processingCanvas.style.width = '120px';
             processingCanvas.style.height = '120px';
             processingCanvas.style.border = '2px solid red';
             processingCanvas.style.zIndex = '9999';
@@ -506,43 +507,68 @@ function aimLoop() {
         }
 
         // Toggle Visibility based on Zoom
-        // Now visible even at wide angle (0.6x and up)
         if (typeof currentZoom !== 'undefined' && currentZoom >= 0.6) {
             debugCanvas.style.display = 'block';
         } else {
             debugCanvas.style.display = 'none';
         }
 
-        // 3. READ PIXELS & SHARPEN
+        // 3. READ PIXELS
         const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
-
-        // Apply CPU Sharpening (Disabled for speed, filters are enough)
-        // applySharpen(imageData);
 
         try {
             const markers = detector.detect(imageData);
 
-            // Visual feedback
-            const reticle = document.getElementById('reticle-ring');
-            const scanLabel = document.getElementById('scan-label');
+            // --- FULL DEBUG VISUALIZATION ---
+            processingCtx.lineWidth = 3;
 
+            // 1. Draw ALL Contours (Blue) - Raw shapes
+            if (detector.contours) {
+                processingCtx.strokeStyle = "rgba(0, 50, 255, 0.5)"; // Blue
+                for (let contour of detector.contours) {
+                    processingCtx.beginPath();
+                    for (let i = 0; i < contour.length; i++) {
+                        processingCtx.lineTo(contour[i].x, contour[i].y);
+                    }
+                    processingCtx.closePath();
+                    processingCtx.stroke();
+                }
+            }
+
+            // 2. Draw Candidates (Orange) - Quadrilaterals rejected later
+            if (detector.candidates) {
+                processingCtx.strokeStyle = "orange";
+                for (let cand of detector.candidates) {
+                    processingCtx.beginPath();
+                    for (let i = 0; i < cand.length; i++) {
+                        processingCtx.lineTo(cand[i].x, cand[i].y);
+                    }
+                    processingCtx.closePath();
+                    processingCtx.stroke();
+                }
+            }
+
+            // 3. Draw Valid Markers (Lime Green) - ID Decoded
             if (markers && markers.length > 0) {
-                // LOCK ON
-                const id = markers[0].id;
-                lockedTargetId = id;
+                processingCtx.lineWidth = 4;
+                for (let m of markers) {
+                    const c = m.corners;
+                    processingCtx.strokeStyle = "lime"; // VALID
+                    processingCtx.beginPath();
+                    processingCtx.moveTo(c[0].x, c[0].y);
+                    processingCtx.lineTo(c[1].x, c[1].y);
+                    processingCtx.lineTo(c[2].x, c[2].y);
+                    processingCtx.lineTo(c[3].x, c[3].y);
+                    processingCtx.closePath();
+                    processingCtx.stroke();
 
-                // Force Green Style
-                if (reticle) {
-                    reticle.style.borderColor = "#00ff00";
-                    reticle.style.boxShadow = "0 0 25px #00ff00, inset 0 0 10px #00ff00"; // Outer + Inner glow
-                    reticle.style.borderWidth = "2px"; // Thicker
+                    // Draw ID ID
+                    processingCtx.fillStyle = "lime";
+                    processingCtx.font = "bold 80px Arial";
+                    processingCtx.fillText("ID:" + m.id, c[0].x, c[0].y);
                 }
-                if (scanLabel) {
-                    scanLabel.innerText = "LOCKED [ID:" + id + "]";
-                    scanLabel.style.color = "#00ff00";
-                    scanLabel.style.textShadow = "0 0 5px #00ff00";
-                }
-            } else {
+            }
+            else {
                 // NO TARGET
                 lockedTargetId = null;
 
