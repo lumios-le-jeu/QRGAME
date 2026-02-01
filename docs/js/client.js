@@ -333,12 +333,12 @@ let processingCtx = null;
 
 async function startCamera() {
     try {
-        console.log("Requesting ULTIMATE Resolution (4K+)...");
+        console.log("Requesting HD Resolution (1080p) for Performance...");
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: "environment",
-                width: { ideal: 4096 }, // Try to get the max possible
-                height: { ideal: 2160 }
+                width: { ideal: 1920 }, // 1080p is enough and much faster
+                height: { ideal: 1080 }
             }
         });
         video.srcObject = stream;
@@ -413,8 +413,8 @@ async function startCamera() {
 
             // Setup Processing Canvas (Optimized for performance/quality balance)
             processingCanvas = document.createElement('canvas');
-            processingCanvas.width = 800;
-            processingCanvas.height = 800;
+            processingCanvas.width = 600; // Reduced from 800 for speed
+            processingCanvas.height = 600;
             processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
 
             requestAnimationFrame(aimLoop); // Start aiming loop
@@ -478,7 +478,7 @@ function aimLoop() {
         // Let's grab a 400x400 region from the CENTER of the source video.
 
         // Reticle is huge (2500px on 4K). We grab a 1500px chunk to cover most of it while keeping performance check.
-        const sourceSize = 1500; // Pixels from source to grab
+        const sourceSize = 1000; // Pixels from source to grab (Reduced for speed)
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
