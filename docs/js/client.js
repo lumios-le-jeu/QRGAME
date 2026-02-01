@@ -145,8 +145,8 @@ function startLocationTracking() {
             // Also update heading if available from speed
             if (pos.coords.heading && !isNaN(pos.coords.heading)) {
                 // only use GPS heading if moving fast enough? 
-                // actually device orientation is better for compass look
             }
+            if (globalPlayers && globalPlayers.length > 0) updateMiniMap(globalPlayers);
         }, (err) => console.warn("GPS Watch Error", err), {
             enableHighAccuracy: true,
             maximumAge: 1000,
@@ -154,17 +154,34 @@ function startLocationTracking() {
         });
     }
 
-    // Start Compass Tracking
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', (event) => {
-            if (event.webkitCompassHeading) {
-                // iOS
-                currentHeading = event.webkitCompassHeading;
-            } else if (event.alpha) {
-                // Android (needs absolute correction normally, but simple alpha is start)
-                currentHeading = 360 - event.alpha;
+    // Start Compass Tracking (Android & iOS)
+    const handleOrientation = (event) => {
+        let heading = 0;
+        if (event.webkitCompassHeading) {
+            // iOS
+            heading = event.webkitCompassHeading;
+        } else if (event.alpha) {
+            // Android: alpha is 0-360. 
+            // 'deviceorientationabsolute' is better for Chrome Android.
+            // If absolute is provided, use it.
+            if (event.absolute === true || event.absolute === undefined) {
+                heading = 360 - event.alpha;
+            } else {
+                // relative alpha, might drift, but better than 0
+                heading = 360 - event.alpha;
             }
-        }, true);
+        }
+
+        currentHeading = heading;
+        // Update Map Rotation in real-time
+        if (globalPlayers && globalPlayers.length > 0) updateMiniMap(globalPlayers);
+    };
+
+    if (window.DeviceOrientationEvent) {
+        // Try Absolute first (Android Chrome)
+        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        // Fallback or iOS
+        window.addEventListener('deviceorientation', handleOrientation, true);
     }
 }
 
