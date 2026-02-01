@@ -503,7 +503,8 @@ function aimLoop() {
         }
 
         // Toggle Visibility based on Zoom
-        if (typeof currentZoom !== 'undefined' && currentZoom > 1.0) {
+        // Now visible even at wide angle (0.6x and up)
+        if (typeof currentZoom !== 'undefined' && currentZoom >= 0.6) {
             debugCanvas.style.display = 'block';
         } else {
             debugCanvas.style.display = 'none';
