@@ -677,6 +677,8 @@ fireBtn.addEventListener('click', (e) => {
 // Globals
 let isAdminMode = false;
 
+const boomSound = new Audio('https://assets.mixkit.co/active_storage/sfx/1698/1698-preview.mp3'); // Explosion
+
 function handleHit(markerId) {
     console.log("Marker Found:", markerId);
 
@@ -695,6 +697,12 @@ function handleHit(markerId) {
         const reloadSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2579/2579-preview.mp3');
         reloadSound.play().catch(e => { });
         return;
+    }
+
+    // HIT SOUND (For valid targets)
+    if (markerId > 0 && markerId < 256) {
+        boomSound.currentTime = 0;
+        boomSound.play().catch(e => { });
     }
 
     if (ammo > 0 || isAdminMode) { // Admin can shoot even without ammo to place zone? "meme sans balle de dispo" -> Yes.
