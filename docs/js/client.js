@@ -333,12 +333,12 @@ let processingCtx = null;
 
 async function startCamera() {
     try {
-        console.log("Requesting HD Resolution (1080p) for Performance...");
+        console.log("Requesting 720p Resolution for Output Speed...");
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: "environment",
-                width: { ideal: 1920 }, // 1080p is enough and much faster
-                height: { ideal: 1080 }
+                width: { ideal: 1280 }, // 720p is the sweet spot for web vision
+                height: { ideal: 720 }
             }
         });
         video.srcObject = stream;
@@ -413,9 +413,10 @@ async function startCamera() {
 
             // Setup Processing Canvas (Optimized for performance/quality balance)
             processingCanvas = document.createElement('canvas');
-            processingCanvas.width = 600; // Reduced from 800 for speed
-            processingCanvas.height = 600;
-            processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
+            processingCanvas.width = 400; // Super Fast
+            processingCanvas.height = 400;
+            // processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true }); // Removed to test speed
+            processingCtx = processingCanvas.getContext('2d');
 
             requestAnimationFrame(aimLoop); // Start aiming loop
         } else {
@@ -477,8 +478,8 @@ function aimLoop() {
         // If 4K video, 256px screen might map to 500-1000px video pixels depending on zoom.
         // Let's grab a 400x400 region from the CENTER of the source video.
 
-        // Reticle is huge (2500px on 4K). We grab a 1500px chunk to cover most of it while keeping performance check.
-        const sourceSize = 1000; // Pixels from source to grab (Reduced for speed)
+        // Reticle is huge. We grab a small chunk for speed.
+        const sourceSize = 500; // Pixels from source to grab (Reduced for speed)
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
@@ -609,7 +610,10 @@ function aimLoop() {
             console.error("Detection Error:", e);
         }
     }
-    requestAnimationFrame(aimLoop);
+    // Throttle loop to ~10 FPS (every 100ms) to unfreeze UI on weak CPU
+    setTimeout(() => {
+        requestAnimationFrame(aimLoop);
+    }, 100);
 }
 
 // Global target lock
