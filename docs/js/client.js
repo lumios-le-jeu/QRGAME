@@ -271,15 +271,8 @@ document.getElementById('btn-confirm-create').addEventListener('click', async (e
     const duration = parseInt(document.getElementById('create-duration').value);
     const resCode = document.getElementById('create-res-code').value;
 
-    /* 
-    // Client-side Validation of "Code Required" logic - DISABLED
-    if ((teams > 2 || maxPlayers > 5 || duration > 30) && (!resCode || resCode.trim() === "")) {
-        alert("LIMITES DÉPASSÉES (Pack Gratuit)\n\nVous avez configuré:\n- " + teams + " Équipes (>2)\n- " + maxPlayers + " Joueurs (>5)\n- " + duration + " Min (>30)\n\nVeuillez entrer un CODE DE RÉSERVATION valide ou réduire les paramètres.");
-        btn.disabled = false;
-        btn.innerText = "Créer la Partie";
-        return;
-    }
-    */
+
+    // No limits for testing
 
     try {
         const coords = await getCurrentLocation();
