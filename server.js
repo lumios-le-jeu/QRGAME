@@ -44,8 +44,8 @@ io.on('connection', (socket) => {
         let maxPlayers = parseInt(data.maxPlayers) || 5;
         const resIcon = data.reservationCode ? "🔒" : "🆓";
 
-        // LIMITS ENFORCEMENT
-        // Free Default: 2 Teams, 5 Players, 30 Minutes
+        // LIMITS ENFORCEMENT - DISABLED FOR TESTING (UNLIMITED)
+        /*
         const isStandardLimits = (teamsCount <= 2 && maxPlayers <= 5 && durationMinutes <= 30);
 
         if (!isStandardLimits) {
@@ -60,6 +60,7 @@ io.on('connection', (socket) => {
                 return;
             }
         }
+        */
 
         const duration = durationMinutes * 60 * 1000; // Minutes to ms
 

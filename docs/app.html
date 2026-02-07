@@ -194,19 +194,19 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase">Équipes</label>
-                        <input type="number" id="create-teams" value="2" min="2" max="4" onchange="checkLimits()"
+                        <input type="number" id="create-teams" value="2" min="2" max="10"
                             class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase">Max Joueurs</label>
-                        <input type="number" id="create-max-players" value="2" min="2" max="50" onchange="checkLimits()"
+                        <input type="number" id="create-max-players" value="10" min="2" max="100"
                             class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                 </div>
 
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase">Durée (Minutes)</label>
-                    <input type="number" id="create-duration" value="15" min="1" max="60" onchange="checkLimits()"
+                    <input type="number" id="create-duration" value="60" min="1" max="999"
                         class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
 

@@ -241,17 +241,19 @@ document.getElementById('btn-confirm-join').addEventListener('click', async (e) 
 // CONFIRM CREATE
 // CHECK LIMITS FUNCTION (Global)
 window.checkLimits = () => {
+    // Disabled for testing (Unlimited Mode)
+    /*
     const teams = parseInt(document.getElementById('create-teams').value) || 2;
     const maxP = parseInt(document.getElementById('create-max-players').value) || 2;
     const duration = parseInt(document.getElementById('create-duration').value) || 15;
     const resSection = document.getElementById('reservation-section');
 
-    // Limits: Teams > 2 OR Players > 5 OR Duration > 30min
     if (teams > 2 || maxP > 5 || duration > 30) {
         resSection.classList.remove('hidden');
     } else {
         resSection.classList.add('hidden');
     }
+    */
 };
 
 // CONFIRM CREATE
@@ -269,13 +271,15 @@ document.getElementById('btn-confirm-create').addEventListener('click', async (e
     const duration = parseInt(document.getElementById('create-duration').value);
     const resCode = document.getElementById('create-res-code').value;
 
-    // Client-side Validation of "Code Required" logic to warn user before server rejects
+    /* 
+    // Client-side Validation of "Code Required" logic - DISABLED
     if ((teams > 2 || maxPlayers > 5 || duration > 30) && (!resCode || resCode.trim() === "")) {
         alert("LIMITES DÉPASSÉES (Pack Gratuit)\n\nVous avez configuré:\n- " + teams + " Équipes (>2)\n- " + maxPlayers + " Joueurs (>5)\n- " + duration + " Min (>30)\n\nVeuillez entrer un CODE DE RÉSERVATION valide ou réduire les paramètres.");
         btn.disabled = false;
         btn.innerText = "Créer la Partie";
         return;
     }
+    */
 
     try {
         const coords = await getCurrentLocation();
