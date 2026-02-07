@@ -55,4 +55,9 @@ print("Génération BLUE TEAM (50-100)...")
 for i in range(50, 101):
     make_tag(i, "BLUE TEAM", (255, 0, 0), "blue")
 
-print(f"\nTERMINÉ ! {len(os.listdir(os.path.join(OUTPUT_DIR, 'red'))) + len(os.listdir(os.path.join(OUTPUT_DIR, 'blue'))) + len(os.listdir(os.path.join(OUTPUT_DIR, 'misc')))} tags générés dans : {OUTPUT_DIR}")
+# 4. STRATEGIC ZONES (200-250)
+print("Génération STRATEGIC ZONES (200-250)...")
+for i in range(200, 251):
+    make_tag(i, "STRATEGIC ZONE", (0, 165, 255), "zones") # Orange/Ambre
+
+print(f"\nTERMINÉ ! {len(os.listdir(os.path.join(OUTPUT_DIR, 'red'))) + len(os.listdir(os.path.join(OUTPUT_DIR, 'blue'))) + len(os.listdir(os.path.join(OUTPUT_DIR, 'misc'))) + len(os.listdir(os.path.join(OUTPUT_DIR, 'zones')))} tags générés dans : {OUTPUT_DIR}")
