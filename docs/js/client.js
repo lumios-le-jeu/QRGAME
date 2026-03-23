@@ -767,8 +767,9 @@ function updateMiniMap(players) {
     north.style.left = (50 + 45 * Math.cos(nav_angle)) + '%';
     north.style.top  = (50 + 45 * Math.sin(nav_angle)) + '%';
 
+    console.log("v1.2.1 - BUILD: 2026-03-24 | MODE: AUTO-REGISTER");
     const debugEl = document.getElementById('game-code-display');
-    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | v1.2.0 | H: ${Math.round(currentHeading)} | P: ${players.length}`;
+    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | v1.2.1 | H: ${Math.round(currentHeading)} | P: ${players.length}`;
 
     const R_h = 6371e3;
     const maxDist_h = 50;
