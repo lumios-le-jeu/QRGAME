@@ -4,6 +4,7 @@ const GAME_SERVER_URL = (location.hostname === "localhost" || location.hostname 
     : "https://fun.qrshotgame.fr";
 
 const socket = io(GAME_SERVER_URL);
+console.log("v1.1.0 - BUILD: 2026-03-23 | MODE: REGISTER");
 
 socket.on("connect_error", (err) => {
     console.error("Server Connection Failed:", err);

@@ -80,4 +80,33 @@ pm2 save
 sudo cloudflared service install <COPIER_LE_TOKEN_CI_DESSUS>
 ```
 
-Et voilà ! Ton Mac sera un serveur de jeu autonome.
+---
+
+## 🔄 PROCÉDURE DE MISE À JOUR RAPIDE
+
+Voici les étapes à suivre dès que je finis de coder une nouvelle fonctionnalité :
+
+### Étape 1 : Envoyer le code (Sur Windows)
+Dans le terminal VS Code de ton PC Windows :
+```powershell
+git add .
+git commit -m "Description de ton changement"
+git push origin main
+```
+
+### Étape 2 : Récupérer le code (Sur le Mac Mini via SSH)
+Connecte-toi au Mac Mini, puis exécute ces 3 commandes :
+```bash
+# 1. Aller dans le bon dossier
+cd /Users/etienneleborgne/QRGAME/qrshot-node
+
+# 2. Télécharger les nouveautés depuis GitHub
+git pull
+
+# 3. Redémarrer le serveur pour appliquer les changements
+pm2 restart qrshot-server
+```
+
+---
+
+*Note : Si le `git pull` échoue à cause de modifications locales sur le Mac, tu peux forcer l'écrasement avec : `git reset --hard origin/main` (Attention, cela efface les changements non commités sur le Mac).*
