@@ -4,7 +4,7 @@ const GAME_SERVER_URL = (location.hostname === "localhost" || location.hostname 
     : "https://fun.qrshotgame.fr";
 
 const socket = io(GAME_SERVER_URL);
-console.log("v1.1.1 - BUILD: 2026-03-24 | MODE: REGISTER");
+console.log("%c QRSHOT v1.2.5 - AUTO-REGISTER MODE ACTIVE ", "background: red; color: white; font-size: 20px; font-weight: bold;");
 
 socket.on("connect_error", (err) => {
     console.error("Server Connection Failed:", err);
@@ -575,8 +575,11 @@ function handleHit(markerId) {
         boomSound.play().catch(()=>{});
     }
 
-    if (ammo > 0 || isAdminMode) {
-        if (!isAdminMode) { ammo--; updateAmmoDisplay(); }
+    // ALLOW REGISTRATION EVEN IF NO AMMO
+    const isWaitingReg = (document.getElementById('my-id-display')?.innerText === "ID: ???");
+    
+    if (ammo > 0 || isAdminMode || isWaitingReg) {
+        if (!isAdminMode && !isWaitingReg) { ammo--; updateAmmoDisplay(); }
 
         if (markerId >= 200) {
             socket.emit('shoot', { id: markerId, lat: myLat, lon: myLon, placing: isAdminMode });
@@ -769,7 +772,7 @@ function updateMiniMap(players) {
 
     console.log("v1.2.1 - BUILD: 2026-03-24 | MODE: AUTO-REGISTER");
     const debugEl = document.getElementById('game-code-display');
-    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | v1.2.1 | H: ${Math.round(currentHeading)} | P: ${players.length}`;
+    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | v1.2.5 | H: ${Math.round(currentHeading)} | P: ${players.length}`;
 
     const R_h = 6371e3;
     const maxDist_h = 50;
