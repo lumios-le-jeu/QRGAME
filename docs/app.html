@@ -185,6 +185,30 @@
             <h2 class="text-xl font-bold text-white text-center mb-4 font-mono">NOUVELLE OPÉRATION</h2>
 
             <div class="space-y-3">
+                <!-- MODE DE JEU -->
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Mode de Jeu</label>
+                    <div class="grid grid-cols-2 gap-2" id="mode-selector">
+                        <!-- CTF -->
+                        <div id="mode-ctf-card"
+                            onclick="selectMode('ctf')"
+                            class="mode-card cursor-pointer rounded-xl border-2 border-blue-500 bg-blue-900/30 p-3 text-center transition-all">
+                            <div class="text-2xl mb-1">🚩</div>
+                            <div class="text-xs font-black text-blue-300 tracking-widest">CAPTURE</div>
+                            <div class="text-[10px] text-slate-400 mt-1">Zones à tenir · Respawn via zone alliée</div>
+                        </div>
+                        <!-- PAINT -->
+                        <div id="mode-paint-card"
+                            onclick="selectMode('paint')"
+                            class="mode-card cursor-pointer rounded-xl border-2 border-slate-600 bg-slate-800/60 p-3 text-center transition-all">
+                            <div class="text-2xl mb-1">🎨</div>
+                            <div class="text-xs font-black text-slate-300 tracking-widest">PAINT</div>
+                            <div class="text-[10px] text-slate-400 mt-1">Colorez vos ennemis · Soignez vos alliés</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="create-game-mode" value="ctf">
+                </div>
+
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase">Nom de Mission</label>
                     <input type="text" id="create-name" value="Mission Alpha"
@@ -192,7 +216,7 @@
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1">
+                    <div class="space-y-1" id="teams-section">
                         <label class="text-xs font-bold text-slate-400 uppercase">Équipes</label>
                         <input type="number" id="create-teams" value="2" min="2" max="10"
                             class="w-full bg-slate-800 border-slate-700 text-white rounded-lg p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none">
@@ -241,6 +265,13 @@
             </div>
         </div>
     </section>
+
+    <style>
+        .mode-card { transition: border-color 0.2s, background-color 0.2s, transform 0.1s; }
+        .mode-card:active { transform: scale(0.96); }
+        .mode-card.selected-ctf  { border-color: #3b82f6; background-color: rgba(37,99,235,0.25); }
+        .mode-card.selected-paint { border-color: #a855f7; background-color: rgba(168,85,247,0.2); }
+    </style>
 
     <!-- MODAL: UPGRADE -->
     <div id="modal-upgrade"
@@ -297,15 +328,22 @@
                 CODE: ----
             </div>
 
-            <!-- Top Right: Score -->
-            <div class="absolute top-4 right-4 flex flex-col gap-1 w-24">
-                <div class="bg-red-900/60 border-l-4 border-red-500 p-1 flex justify-between items-center px-2">
-                    <span class="text-[10px] font-bold text-red-200">RED</span>
-                    <span id="score-red" class="text-lg font-bold text-white font-mono">0</span>
+            <!-- Top Right: Score (CTF = red/blue, Paint = green/blue) -->
+            <div class="absolute top-4 right-4 flex flex-col gap-1 w-28">
+                <!-- CTF row 1 / Paint row 1 -->
+                <div id="score-row-1" class="bg-red-900/60 border-l-4 border-red-500 p-1 flex justify-between items-center px-2">
+                    <span id="score-label-1" class="text-[10px] font-bold text-red-200">RED</span>
+                    <span id="score-val-1" class="text-lg font-bold text-white font-mono">0</span>
                 </div>
-                <div class="bg-blue-900/60 border-l-4 border-blue-500 p-1 flex justify-between items-center px-2">
-                    <span class="text-[10px] font-bold text-blue-200">BLUE</span>
-                    <span id="score-blue" class="text-lg font-bold text-white font-mono">0</span>
+                <!-- CTF row 2 / Paint row 2 -->
+                <div id="score-row-2" class="bg-blue-900/60 border-l-4 border-blue-500 p-1 flex justify-between items-center px-2">
+                    <span id="score-label-2" class="text-[10px] font-bold text-blue-200">BLUE</span>
+                    <span id="score-val-2" class="text-lg font-bold text-white font-mono">0</span>
+                </div>
+                <!-- Paint extras -->
+                <div id="score-alive" class="hidden bg-slate-900/60 border-l-4 border-slate-500 p-1 flex justify-between items-center px-2">
+                    <span class="text-[9px] font-bold text-slate-300">VIVANTS</span>
+                    <span id="score-alive-val" class="text-sm font-bold text-white font-mono">…</span>
                 </div>
             </div>
 
@@ -446,6 +484,18 @@
                     <div class="text-[10px] text-slate-400 font-bold tracking-widest">TEAM</div>
                     <div id="my-team" class="text-xl font-bold text-white uppercase truncate">BLUE</div>
                     <div id="my-id-display" class="text-[10px] text-slate-500 truncate">ID: ...</div>
+                </div>
+            </div>
+
+            <!-- Dead / Respawn Status Overlay -->
+            <div id="dead-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30">
+                <div class="bg-black/75 backdrop-blur-sm rounded-2xl px-6 py-5 text-center border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)] max-w-xs">
+                    <div class="text-5xl mb-3">💀</div>
+                    <div class="text-2xl font-black text-red-400 font-mono tracking-wider mb-2">MORT</div>
+                    <div id="dead-msg" class="text-sm text-slate-300 leading-relaxed">En attente de respawn…</div>
+                    <div class="mt-3 w-full h-1 bg-slate-700 rounded-full overflow-hidden">
+                        <div id="dead-pulse" class="h-full bg-red-500 rounded-full animate-pulse" style="width:100%"></div>
+                    </div>
                 </div>
             </div>
 

@@ -1,13 +1,9 @@
-// Detect environment: Localhost vs Production (GitHub Pages)
+// ─── SERVER CONNECTION ────────────────────────────────────────────────────────
 const GAME_SERVER_URL = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
     ? "http://localhost:3000"
     : "https://fun.qrshotgame.fr";
 
 const socket = io(GAME_SERVER_URL);
-let globalZones = {};
-let globalZoneCoords = {};
-let globalPlayers = [];
-let activeGameCode = null;
 
 socket.on("connect_error", (err) => {
     console.error("Server Connection Failed:", err);
@@ -16,27 +12,31 @@ socket.on("connect_error", (err) => {
     }
 });
 
-// DOM Elements
-const homeScreen = document.getElementById('page-home');
-const gameScreen = document.getElementById('page-game');
-const video = document.getElementById('camera-feed');
-const canvas = document.getElementById('camera-canvas');
-const ctx = canvas.getContext('2d');
-const fireBtn = document.getElementById('btn-fire');
+// ─── DOM ELEMENTS ─────────────────────────────────────────────────────────────
+const video      = document.getElementById('camera-feed');
+const canvas     = document.getElementById('camera-canvas');
+const ctx        = canvas.getContext('2d');
+const fireBtn    = document.getElementById('btn-fire');
 const feedbackMsg = document.getElementById('feedback-msg');
 
-// State
-let myTeam = 'blue'; // Default for now
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let myTeam       = 'blue';
+let myGameMode   = 'ctf';    // 'ctf' or 'paint'
+let myAlive      = true;     // local alive flag
 let isCameraReady = false;
-let ammo = 6;
-const MAX_AMMO = 6;
+let ammo         = 6;
+const MAX_AMMO   = 6;
+let activeGameCode = null;
+let globalZones     = {};
+let globalZoneCoords = {};
+let globalPlayers   = [];
 
-// --- NAVIGATION ---
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
 const screens = {
-    home: document.getElementById('page-home'),
-    join: document.getElementById('page-join'),
+    home:   document.getElementById('page-home'),
+    join:   document.getElementById('page-join'),
     create: document.getElementById('page-create'),
-    game: document.getElementById('page-game')
+    game:   document.getElementById('page-game')
 };
 
 function showScreen(name) {
@@ -48,20 +48,32 @@ function showScreen(name) {
     screens[name].classList.add('active');
 }
 
-// HOME -> JOIN
-document.getElementById('btn-goto-join').addEventListener('click', () => {
-    showScreen('join');
-});
-
-// HOME -> CREATE
-document.getElementById('btn-goto-create').addEventListener('click', () => {
-    showScreen('create');
-});
-
-// BACK BUTTONS
+document.getElementById('btn-goto-join').addEventListener('click', () => showScreen('join'));
+document.getElementById('btn-goto-create').addEventListener('click', () => showScreen('create'));
 document.getElementById('btn-back-home-1').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-back-home-2').addEventListener('click', () => showScreen('home'));
-// SCAN NEARBY (Home)
+
+// ─── MODE SELECTOR ───────────────────────────────────────────────────────────
+window.selectMode = (mode) => {
+    document.getElementById('create-game-mode').value = mode;
+    const ctfCard   = document.getElementById('mode-ctf-card');
+    const paintCard = document.getElementById('mode-paint-card');
+
+    ctfCard.classList.remove('selected-ctf', 'selected-paint', 'border-blue-500', 'bg-blue-900/30', 'border-slate-600', 'bg-slate-800/60');
+    paintCard.classList.remove('selected-ctf', 'selected-paint', 'border-blue-500', 'bg-blue-900/30', 'border-slate-600', 'bg-slate-800/60');
+
+    if (mode === 'ctf') {
+        ctfCard.classList.add('selected-ctf', 'border-blue-500', 'bg-blue-900/30');
+        paintCard.classList.add('border-slate-600', 'bg-slate-800/60');
+    } else {
+        paintCard.classList.add('selected-paint', 'border-purple-500', 'bg-purple-900/30');
+        ctfCard.classList.add('border-slate-600', 'bg-slate-800/60');
+    }
+};
+// Init: CTF selected by default
+selectMode('ctf');
+
+// ─── NEARBY GAMES ─────────────────────────────────────────────────────────────
 const scanBtn = document.getElementById('btn-scan-games');
 if (scanBtn) {
     scanBtn.addEventListener('click', async () => {
@@ -80,8 +92,8 @@ if (scanBtn) {
 
 socket.on('res_nearby_games', (games) => {
     const list = document.getElementById('nearby-results');
-    const scanBtn = document.getElementById('btn-scan-games');
-    if (scanBtn) scanBtn.innerText = 'REFRESH';
+    const btn  = document.getElementById('btn-scan-games');
+    if (btn) btn.innerText = 'REFRESH';
 
     if (!games || games.length === 0) {
         list.innerHTML = '<small>Aucune partie trouvée à -20km.</small>';
@@ -90,22 +102,15 @@ socket.on('res_nearby_games', (games) => {
 
     list.innerHTML = '';
     games.forEach(g => {
+        const modeIcon = g.gameMode === 'paint' ? '🎨' : '🚩';
         const div = document.createElement('div');
-        div.className = 'lobby-item';
-        div.style.marginBottom = '5px';
-        div.style.padding = '5px';
-        div.style.background = 'rgba(255,255,255,0.1)';
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.alignItems = 'center';
-
+        div.style.cssText = 'margin-bottom:5px;padding:5px;background:rgba(255,255,255,0.1);display:flex;justify-content:space-between;align-items:center;border-radius:6px';
         div.innerHTML = `
             <div>
-                <strong style="color:var(--neon-cyan)">${g.name || 'Mission'}</strong>
-                <br>
+                <strong style="color:#67e8f9">${modeIcon} ${g.name || 'Mission'}</strong><br>
                 <small>${g.dist.toFixed(2)} km | ${g.count} Joueurs</small>
             </div>
-            <button class="btn primary" style="padding:4px 8px; font-size:0.8rem;" onclick="joinFromLobby('${g.code}')">JOIN</button>
+            <button style="padding:4px 8px;font-size:0.8rem;background:#3b82f6;border:none;color:white;border-radius:6px;cursor:pointer;" onclick="joinFromLobby('${g.code}')">JOIN</button>
         `;
         list.appendChild(div);
     });
@@ -116,406 +121,299 @@ window.joinFromLobby = (code) => {
     document.getElementById('join-code').value = code;
 };
 
-// Globals for Compass/GPS
+// ─── GPS ──────────────────────────────────────────────────────────────────────
 let currentHeading = 0;
 let myLat = 0;
 let myLon = 0;
 
-// GPS Helper
-const getCurrentLocation = () => {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) return reject(new Error("Combinaison GPS incompatible ou refusée"));
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                myLat = pos.coords.latitude;
-                myLon = pos.coords.longitude;
-                resolve({ lat: myLat, lon: myLon });
-            },
-            (err) => reject(err),
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-    });
-};
+const getCurrentLocation = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("GPS incompatible ou refusé"));
+    navigator.geolocation.getCurrentPosition(
+        (pos) => { myLat = pos.coords.latitude; myLon = pos.coords.longitude; resolve({ lat: myLat, lon: myLon }); },
+        (err) => reject(err),
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+});
 
 function startLocationTracking() {
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition((pos) => {
             myLat = pos.coords.latitude;
             myLon = pos.coords.longitude;
-            // Also update heading if available from speed
-            if (pos.coords.heading && !isNaN(pos.coords.heading)) {
-                // only use GPS heading if moving fast enough? 
-            }
             if (globalPlayers && globalPlayers.length > 0) updateMiniMap(globalPlayers);
-        }, (err) => console.warn("GPS Watch Error", err), {
-            enableHighAccuracy: true,
-            maximumAge: 1000,
-            timeout: 5000
-        });
+        }, (err) => console.warn("GPS Watch Error", err), { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 });
     }
 
-    // Start Compass Tracking (Android & iOS)
     const handleOrientation = (event) => {
         let heading = 0;
         if (event.webkitCompassHeading) {
-            // iOS
             heading = event.webkitCompassHeading;
         } else if (event.alpha) {
-            // Android: alpha is 0-360. 
-            // 'deviceorientationabsolute' is better for Chrome Android.
-            // If absolute is provided, use it.
-            if (event.absolute === true || event.absolute === undefined) {
-                heading = 360 - event.alpha;
-            } else {
-                // relative alpha, might drift, but better than 0
-                heading = 360 - event.alpha;
-            }
+            heading = (event.absolute === true || event.absolute === undefined) ? 360 - event.alpha : 360 - event.alpha;
         }
-
         currentHeading = heading;
-        // Update Map Rotation in real-time
         if (globalPlayers && globalPlayers.length > 0) updateMiniMap(globalPlayers);
     };
 
     if (window.DeviceOrientationEvent) {
-        // Try Absolute first (Android Chrome)
         window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-        // Fallback or iOS
         window.addEventListener('deviceorientation', handleOrientation, true);
     }
 }
 
-// iOS Compass Permission Helper
 async function requestSensors() {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const response = await DeviceOrientationEvent.requestPermission();
-            if (response === 'granted') {
-                console.log("Compass granted");
-            } else {
-                alert("Permission boussole refusée");
-            }
-        } catch (e) {
-            console.error(e);
-        }
+            if (response !== 'granted') alert("Permission boussole refusée");
+        } catch (e) { console.error(e); }
     }
 }
 
-// CONFIRM JOIN
-// CONFIRM JOIN
+// ─── JOIN ─────────────────────────────────────────────────────────────────────
 document.getElementById('btn-confirm-join').addEventListener('click', async (e) => {
     const btn = e.target;
     btn.disabled = true;
     btn.innerText = "Chargement...";
-
-    // 1. Request Sensors (Must be first on click)
     await requestSensors();
-
-    // Ensure we start location tracking immediately
     startLocationTracking();
-
-    const code = document.getElementById('join-code').value.toUpperCase();
+    const code   = document.getElementById('join-code').value.toUpperCase();
     const pseudo = document.getElementById('join-pseudo').value || 'Soldier';
-    const team = document.getElementById('join-team').value;
-
-    if (code.length !== 4) {
-        alert("Code invalide (4 caractères)");
-        btn.disabled = false;
-        btn.innerText = "GO";
-        return;
-    }
-
+    const team   = document.getElementById('join-team').value;
+    if (code.length !== 4) { alert("Code invalide (4 caractères)"); btn.disabled = false; btn.innerText = "GO"; return; }
     try {
         const coords = await getCurrentLocation();
         enterGame(pseudo, team, code, coords);
-        // Do NOT re-enable, we change screen
     } catch (err) {
         console.error(err);
         alert("GPS REQUIS : Donnez l'accès à la localisation pour rejoindre.");
-        btn.disabled = false;
-        btn.innerText = "GO";
+        btn.disabled = false; btn.innerText = "GO";
     }
 });
 
-// CONFIRM CREATE
-// CONFIRM CREATE
-// CHECK LIMITS FUNCTION (Global)
-window.checkLimits = () => {
-    // Disabled for testing (Unlimited Mode)
-    /*
-    const teams = parseInt(document.getElementById('create-teams').value) || 2;
-    const maxP = parseInt(document.getElementById('create-max-players').value) || 2;
-    const duration = parseInt(document.getElementById('create-duration').value) || 15;
-    const resSection = document.getElementById('reservation-section');
+// ─── CREATE ───────────────────────────────────────────────────────────────────
+window.checkLimits = () => { /* disabled */ };
 
-    if (teams > 2 || maxP > 5 || duration > 30) {
-        resSection.classList.remove('hidden');
-    } else {
-        resSection.classList.add('hidden');
-    }
-    */
-};
-
-// CONFIRM CREATE
 document.getElementById('btn-confirm-create').addEventListener('click', async (e) => {
     const btn = e.target;
     btn.disabled = true;
     btn.innerText = "Création...";
-
-    // 1. Request Sensors
     await requestSensors();
 
-    const name = document.getElementById('create-name').value;
-    const teams = parseInt(document.getElementById('create-teams').value);
+    const name       = document.getElementById('create-name').value;
+    const teams      = parseInt(document.getElementById('create-teams').value);
     const maxPlayers = parseInt(document.getElementById('create-max-players').value);
-    const duration = parseInt(document.getElementById('create-duration').value);
-    const resCode = document.getElementById('create-res-code').value;
-
-
-    // No limits for testing
+    const duration   = parseInt(document.getElementById('create-duration').value);
+    const resCode    = document.getElementById('create-res-code').value;
+    const gameMode   = document.getElementById('create-game-mode').value || 'ctf';
 
     try {
-        const coords = await getCurrentLocation();
+        const coords   = await getCurrentLocation();
         const isPlayer = document.getElementById('create-is-player').checked;
 
-        // Admin creates game
-        socket.emit('createGame', {
-            name, teams, maxPlayers, duration, reservationCode: resCode,
-            lat: coords.lat, lon: coords.lon
-        }, (response) => {
+        socket.emit('createGame', { name, teams, maxPlayers, duration, reservationCode: resCode, gameMode, lat: coords.lat, lon: coords.lon }, (response) => {
             if (response.success) {
-                alert("Partie créée ! Code: " + response.gameCode);
-
+                alert(`Partie créée ! Code: ${response.gameCode} | Mode: ${response.gameMode === 'paint' ? '🎨 PAINT' : '🚩 CAPTURE'}`);
+                myGameMode = response.gameMode;
                 if (isPlayer) {
-                    // Creator joins as Player 1 (Red)
-                    enterGame('Commander', 'red', response.gameCode, coords);
+                    enterGame('Commander', 'auto', response.gameCode, coords);
                 } else {
-                    // Creator joins as Spectator (Admin)
                     enterGame('Admin', 'spectator', response.gameCode, coords);
                 }
             } else {
                 alert("ERREUR CRÉATION: " + (response.msg || response.error));
-                btn.disabled = false;
-                btn.innerText = "Créer la Partie";
+                btn.disabled = false; btn.innerText = "LANCER";
             }
         });
     } catch (err) {
         console.error(err);
         alert("ERREUR GPS : Impossible de créer la partie sans localisation.\nVérifiez vos permissions.");
-        btn.disabled = false;
-        btn.innerText = "Créer la Partie";
+        btn.disabled = false; btn.innerText = "LANCER";
     }
 });
 
-let redScore = 0;
-let blueScore = 0;
-let redZones = 0;
-let blueZones = 0;
-
-function updateScoreBoard() {
-    document.getElementById('score-red').innerHTML = `&nbsp;${redScore} <br> <small>🚩 ${redZones}</small>`;
-    document.getElementById('score-blue').innerHTML = `&nbsp;${blueScore} <br> <small>🚩 ${blueZones}</small>`;
-}
-
+// ─── ENTER GAME ───────────────────────────────────────────────────────────────
 function enterGame(username, team, gameCode, coords) {
     activeGameCode = gameCode;
     showScreen('game');
 
-    // iOS Compass Permission (User Interaction Required Here)
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-            .then(permissionState => {
-                if (permissionState === 'granted') {
-                    // Logic is handled in startGpsTracking listener
-                }
-            })
-            .catch(console.error);
+        DeviceOrientationEvent.requestPermission().then(s => {}).catch(console.error);
     }
 
-    // Request Fullscreen for Immersive/Kiosk feel
     if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(e => console.log("Fullscreen blocked", e));
     }
 
-    // --- SCREEN LOCK (Kiosk Mode) ---
-    // Prevent accidental back navigation
     history.pushState(null, document.title, location.href);
-    window.addEventListener('popstate', function (event) {
-        history.pushState(null, document.title, location.href);
-    });
+    window.addEventListener('popstate', () => history.pushState(null, document.title, location.href));
 
-    // Add Padlock Icon
+    // Lock button
     let lockBtn = document.getElementById('screen-lock-btn');
     if (!lockBtn) {
         lockBtn = document.createElement('div');
         lockBtn.id = 'screen-lock-btn';
-        lockBtn.innerHTML = "🔒"; // Locked text
+        lockBtn.innerHTML = "🔒";
         document.body.appendChild(lockBtn);
-
-        // Long Press Logic
         let pressTimer;
         const startPress = () => {
             lockBtn.style.transform = "scale(0.9)";
-            lockBtn.style.background = 'rgba(255,0,0,0.5)'; // Red feedback
+            lockBtn.style.background = 'rgba(255,0,0,0.5)';
             pressTimer = window.setTimeout(() => {
-                // UNLOCKED ACTION
-                const confirmExit = confirm("QUITTER LA MISSION ?");
-                if (confirmExit) {
-                    location.reload(); // Reload to quit
-                } else {
-                    lockBtn.innerHTML = "🔒";
-                    lockBtn.style.background = 'rgba(0,0,0,0.5)';
-                }
-            }, 2000); // 2 seconds
+                if (confirm("QUITTER LA MISSION ?")) location.reload();
+                else {  lockBtn.innerHTML = "🔒"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; }
+            }, 2000);
         };
-        const cancelPress = () => {
-            lockBtn.style.transform = "scale(1)";
-            lockBtn.style.background = 'rgba(0,0,0,0.5)';
-            clearTimeout(pressTimer);
-        };
-
+        const cancelPress = () => { lockBtn.style.transform = "scale(1)"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; clearTimeout(pressTimer); };
         lockBtn.addEventListener('mousedown', startPress);
         lockBtn.addEventListener('touchstart', startPress);
         lockBtn.addEventListener('mouseup', cancelPress);
         lockBtn.addEventListener('mouseleave', cancelPress);
         lockBtn.addEventListener('touchend', cancelPress);
     }
-
-    // Apply/Update Styles
-    lockBtn.style.display = 'flex';
-    lockBtn.style.position = 'fixed';
-    lockBtn.style.top = '10px';
-    lockBtn.style.left = '10px';
-    lockBtn.style.right = 'auto';
-    lockBtn.style.fontSize = '12px';
-    lockBtn.style.zIndex = '10001';
-    lockBtn.style.background = 'rgba(0,0,0,0.5)';
-    lockBtn.style.borderRadius = '50%';
-    lockBtn.style.width = '20px';
-    lockBtn.style.height = '20px';
-    lockBtn.style.justifyContent = 'center';
-    lockBtn.style.alignItems = 'center';
-    lockBtn.style.cursor = 'pointer';
-    lockBtn.style.userSelect = 'none';
+    Object.assign(lockBtn.style, {
+        display:'flex', position:'fixed', top:'10px', left:'10px', right:'auto',
+        fontSize:'12px', zIndex:'10001', background:'rgba(0,0,0,0.5)', borderRadius:'50%',
+        width:'20px', height:'20px', justifyContent:'center', alignItems:'center',
+        cursor:'pointer', userSelect:'none'
+    });
 
     startCamera();
     updateAmmoDisplay();
 
-    // Join request
-    socket.emit('joinGame', {
-        username: username,
-        team: team, // 'red', 'blue', or 'auto'
-        gameCode: gameCode,
-        lat: coords ? coords.lat : 0,
-        lon: coords ? coords.lon : 0
-    });
+    socket.emit('joinGame', { username, team, gameCode, lat: coords ? coords.lat : 0, lon: coords ? coords.lon : 0 });
 
-    // Set Game Code on HUD
     const codeDisplay = document.getElementById('game-code-display');
     if (codeDisplay) codeDisplay.innerText = `CODE: ${gameCode}`;
-
-    // We wait for server to confirm team via 'assignedId' or 'playerList' before updateTeamDisplay
-    // But we can set a temporary "Waiting..." state
-    // Start global location tracking if not already
     startLocationTracking();
 }
 
-// (Globals already defined above)
-// Camera & Scanning setup is next
+// ─── SCOREBOARD ──────────────────────────────────────────────────────────────
+let score1 = 0, score2 = 0;
 
-// --- CAMERA & SCANNING ---
+function updateScoreBoard(data) {
+    const row1  = document.getElementById('score-row-1');
+    const row2  = document.getElementById('score-row-2');
+    const lbl1  = document.getElementById('score-label-1');
+    const lbl2  = document.getElementById('score-label-2');
+    const val1  = document.getElementById('score-val-1');
+    const val2  = document.getElementById('score-val-2');
+    const alive  = document.getElementById('score-alive');
+    const aliveV = document.getElementById('score-alive-val');
+
+    if (myGameMode === 'paint') {
+        // Row 1 = GREEN
+        row1.className = 'bg-green-900/60 border-l-4 border-green-500 p-1 flex justify-between items-center px-2';
+        lbl1.className = 'text-[10px] font-bold text-green-200';
+        lbl1.innerText = 'VERT';
+        val1.innerText = data.greenScore ?? 0;
+
+        // Row 2 = BLUE
+        row2.className = 'bg-blue-900/60 border-l-4 border-blue-500 p-1 flex justify-between items-center px-2';
+        lbl2.className = 'text-[10px] font-bold text-blue-200';
+        lbl2.innerText = 'BLEU';
+        val2.innerText = data.blueScore ?? 0;
+
+        // Alive counter
+        if (alive) {
+            alive.classList.remove('hidden');
+            if (aliveV) aliveV.innerText = `🟢${data.greenAlive ?? '?'} 🔵${data.blueAlive ?? '?'}`;
+        }
+    } else {
+        // CTF: Row1=RED, Row2=BLUE
+        row1.className = 'bg-red-900/60 border-l-4 border-red-500 p-1 flex justify-between items-center px-2';
+        lbl1.className = 'text-[10px] font-bold text-red-200';
+        lbl1.innerText = 'RED';
+        val1.innerText = (data.redScore !== undefined) ? data.redScore : (data.redZoneCount !== undefined ? `${data.redScore ?? 0}` : 0);
+
+        row2.className = 'bg-blue-900/60 border-l-4 border-blue-500 p-1 flex justify-between items-center px-2';
+        lbl2.className = 'text-[10px] font-bold text-blue-200';
+        lbl2.innerText = 'BLUE';
+        val2.innerText = data.blueScore ?? 0;
+
+        if (alive) alive.classList.add('hidden');
+    }
+}
+
+// ─── DEAD OVERLAY ─────────────────────────────────────────────────────────────
+function showDeadOverlay(msg) {
+    myAlive = false;
+    const overlay = document.getElementById('dead-overlay');
+    const msgEl   = document.getElementById('dead-msg');
+    if (overlay) { overlay.classList.remove('hidden'); overlay.style.display = 'flex'; }
+    if (msgEl)   msgEl.innerText = msg || "En attente de respawn…";
+    // Disable fire button visually
+    if (fireBtn) { fireBtn.style.opacity = '0.3'; fireBtn.style.pointerEvents = 'none'; }
+}
+
+function hideDeadOverlay() {
+    myAlive = true;
+    const overlay = document.getElementById('dead-overlay');
+    if (overlay) { overlay.classList.add('hidden'); overlay.style.display = 'none'; }
+    // Re-enable fire button
+    if (fireBtn) { fireBtn.style.opacity = '1'; fireBtn.style.pointerEvents = 'auto'; }
+    showFeedback("RESPAWN !\nBienvenue de retour !", "lime");
+}
+
+// ─── CAMERA & SCANNING ────────────────────────────────────────────────────────
 let detector = null;
 let processingCanvas = null;
-let processingCtx = null;
+let processingCtx    = null;
 
 async function startCamera() {
     try {
-        console.log("Requesting 720p Resolution for Output Speed...");
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: "environment",
-                width: { ideal: 1280 }, // 720p is the sweet spot for web vision
-                height: { ideal: 720 }
-            }
+            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
         });
         video.srcObject = stream;
         video.setAttribute("playsinline", true);
         video.play();
         isCameraReady = true;
 
-        // --- ZOOM LOGIC ---
         const track = stream.getVideoTracks()[0];
         const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-        const settings = track.getSettings ? track.getSettings() : {};
+        const settings     = track.getSettings ? track.getSettings() : {};
 
-        // Focus Logic (Try to force continuous focus)
-        try {
-            await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
-            console.log("Focus mode enabled");
-        } catch (err) {
-            console.warn("Focus mode not supported");
-        }
+        try { await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch(e) {}
 
         const zoomContainer = document.getElementById('zoom-container');
-        const zoomSlider = document.getElementById('zoom-slider');
-        const zoomDisplay = document.getElementById('zoom-level-display');
+        const zoomSlider    = document.getElementById('zoom-slider');
+        const zoomDisplay   = document.getElementById('zoom-level-display');
 
-        // Always show Zoom Slider (Native or Digital Fallback)
         zoomContainer.classList.remove('hidden');
         zoomContainer.classList.add('flex');
 
         let hasNativeZoom = false;
-
         if (capabilities.zoom) {
-            // Native Zoom Supported
             hasNativeZoom = true;
-            console.log("Native zoom supported");
-            zoomSlider.min = capabilities.zoom.min;
-            zoomSlider.max = capabilities.zoom.max;
-            zoomSlider.step = capabilities.zoom.step || 0.1;
+            zoomSlider.min   = capabilities.zoom.min;
+            zoomSlider.max   = capabilities.zoom.max;
+            zoomSlider.step  = capabilities.zoom.step || 0.1;
             zoomSlider.value = settings.zoom || 1;
         } else {
-            // Digital Zoom Fallback (CSS)
-            console.log("Native zoom missing, using Digital Zoom");
-            zoomSlider.min = 1;
-            zoomSlider.max = 5; // Limit digital zoom to 5x to avoid pixels
-            zoomSlider.step = 0.1;
-            zoomSlider.value = 1;
+            zoomSlider.min = 1; zoomSlider.max = 5; zoomSlider.step = 0.1; zoomSlider.value = 1;
         }
 
-        // Global variable for Debug Logic
         window.currentZoom = 1.0;
 
         zoomSlider.addEventListener('input', async (e) => {
             const zoomVal = parseFloat(e.target.value);
-            window.currentZoom = zoomVal; // Update global state
+            window.currentZoom = zoomVal;
             zoomDisplay.innerText = zoomVal.toFixed(1) + "x";
-
             if (hasNativeZoom) {
-                try {
-                    await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
-                } catch (err) {
-                    console.error("Zoom failed:", err);
-                }
+                try { await track.applyConstraints({ advanced: [{ zoom: zoomVal }] }); } catch(e) {}
             } else {
-                // Apply Digital Zoom via CSS
                 video.style.transform = `scale(${zoomVal})`;
             }
         });
 
-        // Init Aruco Detector
         if (typeof AR !== 'undefined') {
             detector = new AR.Detector();
-            console.log("Aruco Detector Ready");
-
-            // Setup Processing Canvas (Optimized for performance/quality balance)
             processingCanvas = document.createElement('canvas');
-            processingCanvas.width = 400; // Super Fast
+            processingCanvas.width = 400;
             processingCanvas.height = 400;
-            // processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true }); // Removed to test speed
             processingCtx = processingCanvas.getContext('2d');
-
-            requestAnimationFrame(aimLoop); // Start aiming loop
+            requestAnimationFrame(aimLoop);
         } else {
             console.error("AR Lib not loaded");
         }
@@ -525,307 +423,154 @@ async function startCamera() {
     }
 }
 
-// SHARPEN FILTER KERNEL
-function applySharpen(imageData) {
-    const w = imageData.width;
-    const h = imageData.height;
-    const data = imageData.data;
-    const buff = new Uint8ClampedArray(data); // Copy for reading reference
-
-    // Simple 3x3 Sharpen Kernel
-    //  0 -1  0
-    // -1  5 -1
-    //  0 -1  0
-
-    for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-            const i = (y * w + x) * 4;
-
-            // RGB only
-            for (let c = 0; c < 3; c++) {
-                const val = 5 * buff[i + c]
-                    - buff[i + c - 4] // Left
-                    - buff[i + c + 4] // Right
-                    - buff[i + c - w * 4] // Top
-                    - buff[i + c + w * 4]; // Bottom
-
-                data[i + c] = val; // Clamp handled by Uint8ClampedArray view of data
-            }
-            // Alpha remains unchanged
-        }
-    }
-}
-
-// CONTINUOUS AIMING (For feedback & lock)
+// ─── AIM LOOP ─────────────────────────────────────────────────────────────────
 function aimLoop() {
-    if (!isCameraReady || !detector || !processingCtx) {
-        requestAnimationFrame(aimLoop);
-        return;
-    }
+    if (!isCameraReady || !detector || !processingCtx) { requestAnimationFrame(aimLoop); return; }
 
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
-
-        // 1. CROP CENTER (Sniper Logic)
-        // We only look at the center of the video frame, leveraging full resolution pixels.
-        // Don't downscale the whole 4K image!
-
-        const cropSize = Math.min(video.videoWidth, video.videoHeight) / 2; // Grab a generous center chunk (or tune to matches reticle)
-        // Actually, creating a fixed window matches the visual reticle better.
-        // Reticle is approx 256px wide physically on screen.
-        // If 4K video, 256px screen might map to 500-1000px video pixels depending on zoom.
-        // Let's grab a 400x400 region from the CENTER of the source video.
-
-        // Reticle is huge. We grab a small chunk for speed.
-        const sourceSize = 500; // Pixels from source to grab (Reduced for speed)
+        const sourceSize = 500;
         const sx = (video.videoWidth - sourceSize) / 2;
         const sy = (video.videoHeight - sourceSize) / 2;
 
-        // 2. PRE-PROCESSING (Raw Speed)
-        // Filters removed to prevent Android GPU Freeze.
-        // Aruco's internal Adaptive Threshold handles contrast well enough.
         processingCtx.filter = "none";
-
-        // Draw centered crop into smaller processing canvas
         processingCtx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, processingCanvas.width, processingCanvas.height);
 
-        // DEBUG: Show what the robot sees (Only when Zoomed)
         let debugCanvas = document.getElementById('debug-canvas');
         if (!debugCanvas) {
             processingCanvas.id = 'debug-canvas';
-            processingCanvas.style.position = 'absolute';
-            processingCanvas.style.bottom = '10px';
-            processingCanvas.style.left = '10px';
-            processingCanvas.style.width = '120px';
-            processingCanvas.style.height = '120px';
-            processingCanvas.style.border = '2px solid red';
-            processingCanvas.style.zIndex = '9999';
-            processingCanvas.style.backgroundColor = 'black';
-            processingCanvas.style.display = 'none'; // Hidden by default
+            Object.assign(processingCanvas.style, {
+                position:'absolute', bottom:'10px', left:'10px',
+                width:'120px', height:'120px', border:'2px solid red',
+                zIndex:'9999', backgroundColor:'black', display:'none'
+            });
             document.body.appendChild(processingCanvas);
             debugCanvas = processingCanvas;
         }
+        debugCanvas.style.display = (typeof currentZoom !== 'undefined' && currentZoom > 1.0) ? 'block' : 'none';
 
-        // Toggle Visibility based on Zoom
-        // Only visible when zoomed in (Sniper Mode)
-        if (typeof currentZoom !== 'undefined' && currentZoom > 1.0) {
-            debugCanvas.style.display = 'block';
-        } else {
-            debugCanvas.style.display = 'none';
-        }
-
-        // 3. READ PIXELS
         const imageData = processingCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
-
         try {
-            const markers = detector.detect(imageData);
-
-            // --- FULL DEBUG VISUALIZATION ---
-            processingCtx.lineWidth = 3;
-
-            // 1. Draw ALL Contours (Blue) - Raw shapes
-            if (detector.contours) {
-                processingCtx.strokeStyle = "rgba(0, 50, 255, 0.5)"; // Blue
-                for (let contour of detector.contours) {
-                    processingCtx.beginPath();
-                    for (let i = 0; i < contour.length; i++) {
-                        processingCtx.lineTo(contour[i].x, contour[i].y);
-                    }
-                    processingCtx.closePath();
-                    processingCtx.stroke();
-                }
-            }
-
-            // 2. Draw Candidates (Orange) - Quadrilaterals rejected later
-            if (detector.candidates) {
-                processingCtx.strokeStyle = "orange";
-                for (let cand of detector.candidates) {
-                    processingCtx.beginPath();
-                    for (let i = 0; i < cand.length; i++) {
-                        processingCtx.lineTo(cand[i].x, cand[i].y);
-                    }
-                    processingCtx.closePath();
-                    processingCtx.stroke();
-                }
-            }
-
-            // 3. Draw Valid Markers (Lime Green) - ID Decoded
-            // Visual feedback UI Elements (Must be selected inside loop or defined globally)
-            const reticle = document.getElementById('reticle-ring');
+            const markers   = detector.detect(imageData);
+            const reticle   = document.getElementById('reticle-ring');
             const scanLabel = document.getElementById('scan-label');
 
-            if (markers && markers.length > 0) {
-                // LOCK ON
-                const id = markers[0].id;
+            processingCtx.lineWidth = 3;
+            if (detector.contours) {
+                processingCtx.strokeStyle = "rgba(0,50,255,0.5)";
+                for (let c of detector.contours) { processingCtx.beginPath(); for (let p of c) processingCtx.lineTo(p.x,p.y); processingCtx.closePath(); processingCtx.stroke(); }
+            }
+            if (detector.candidates) {
+                processingCtx.strokeStyle = "orange";
+                for (let c of detector.candidates) { processingCtx.beginPath(); for (let p of c) processingCtx.lineTo(p.x,p.y); processingCtx.closePath(); processingCtx.stroke(); }
+            }
 
-                // --- VISUALIZATION ON DEBUG CANVAS ---
+            if (markers && markers.length > 0) {
+                const id = markers[0].id;
                 processingCtx.lineWidth = 4;
                 for (let m of markers) {
                     const c = m.corners;
-                    processingCtx.strokeStyle = "lime"; // VALID
+                    processingCtx.strokeStyle = "lime";
                     processingCtx.beginPath();
-                    processingCtx.moveTo(c[0].x, c[0].y);
-                    processingCtx.lineTo(c[1].x, c[1].y);
-                    processingCtx.lineTo(c[2].x, c[2].y);
-                    processingCtx.lineTo(c[3].x, c[3].y);
-                    processingCtx.closePath();
-                    processingCtx.stroke();
-
-                    // Draw ID
-                    processingCtx.fillStyle = "lime";
-                    processingCtx.font = "bold 80px Arial";
-                    processingCtx.fillText("ID:" + m.id, c[0].x, c[0].y);
+                    processingCtx.moveTo(c[0].x,c[0].y); processingCtx.lineTo(c[1].x,c[1].y);
+                    processingCtx.lineTo(c[2].x,c[2].y); processingCtx.lineTo(c[3].x,c[3].y);
+                    processingCtx.closePath(); processingCtx.stroke();
+                    processingCtx.fillStyle="lime"; processingCtx.font="bold 80px Arial";
+                    processingCtx.fillText("ID:"+m.id, c[0].x, c[0].y);
                 }
-
                 lockedTargetId = id;
-
-                // Force Green Style
-                if (reticle) {
-                    reticle.style.borderColor = "#00ff00";
-                    reticle.style.boxShadow = "0 0 25px #00ff00, inset 0 0 10px #00ff00"; // Outer + Inner glow
-                    reticle.style.borderWidth = "2px"; // Thicker
-                }
-                if (scanLabel) {
-                    scanLabel.innerText = "LOCKED [ID:" + id + "]";
-                    scanLabel.style.color = "#00ff00";
-                    scanLabel.style.textShadow = "0 0 5px #00ff00";
-                }
+                if (reticle)   { reticle.style.borderColor="lime"; reticle.style.boxShadow="0 0 25px lime, inset 0 0 10px lime"; reticle.style.borderWidth="2px"; }
+                if (scanLabel) { scanLabel.innerText="LOCKED [ID:"+id+"]"; scanLabel.style.color="lime"; scanLabel.style.textShadow="0 0 5px lime"; }
             } else {
-                // NO TARGET
                 lockedTargetId = null;
-
-                if (reticle) {
-                    // Restore Red style (matching app.html default)
-                    reticle.style.borderColor = "rgba(239, 68, 68, 0.5)";
-                    reticle.style.boxShadow = "none";
-                    reticle.style.borderWidth = "1px";
-                }
-                if (scanLabel) {
-                    scanLabel.innerText = "SYSTEM READY";
-                    scanLabel.style.color = "#f87171"; // Red-400
-                    scanLabel.style.textShadow = "none";
-                }
+                if (reticle)   { reticle.style.borderColor="rgba(239,68,68,0.5)"; reticle.style.boxShadow="none"; reticle.style.borderWidth="1px"; }
+                if (scanLabel) { scanLabel.innerText="SYSTEM READY"; scanLabel.style.color="#f87171"; scanLabel.style.textShadow="none"; }
             }
-        } catch (e) {
-            console.error("Detection Error:", e);
-        }
+        } catch(e) { console.error("Detection Error:", e); }
     }
-    // Throttle loop to ~5 FPS (every 200ms) to unfreeze UI on weak CPU
-    setTimeout(() => {
-        requestAnimationFrame(aimLoop);
-    }, 200);
+    setTimeout(() => requestAnimationFrame(aimLoop), 200);
 }
 
-// Global target lock
+// ─── GLOBAL TARGET ────────────────────────────────────────────────────────────
 let lockedTargetId = null;
 
-// FIRE ACTION (Triggered by Button)
-/* scanFrame deleted, functionality moved to aimLoop + fire handler */
+// ─── SOUNDS ───────────────────────────────────────────────────────────────────
+const shootSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2144/2144-preview.mp3');
+const emptySound = new Audio('https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3');
+const boomSound  = new Audio('https://assets.mixkit.co/active_storage/sfx/1698/1698-preview.mp3');
+const hitSound   = new Audio('https://assets.mixkit.co/active_storage/sfx/2747/2747-preview.mp3');
 
-// --- GAMEPLAY ---
-const shootSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2144/2144-preview.mp3'); // Loud Gunshot
-const emptySound = new Audio('https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3'); // Pistol dry fire
-
-// HIT OVERLAY
+// ─── HIT OVERLAY ─────────────────────────────────────────────────────────────
 const hitOverlay = document.createElement('div');
 hitOverlay.id = 'hit-overlay';
-hitOverlay.style.position = 'absolute';
-hitOverlay.style.top = '0';
-hitOverlay.style.left = '0';
-hitOverlay.style.width = '100vw';
-hitOverlay.style.height = '100vh';
-hitOverlay.style.zIndex = '1000';
-hitOverlay.style.pointerEvents = 'none';
-// Broken glass or bullet hole
-hitOverlay.style.backgroundImage = "url('https://pngimg.com/uploads/broken_glass/broken_glass_PNG27.png')";
-hitOverlay.style.backgroundSize = 'cover';
-hitOverlay.style.backgroundPosition = 'center';
-hitOverlay.style.opacity = '0';
-hitOverlay.style.transition = 'opacity 0.2s';
+Object.assign(hitOverlay.style, {
+    position:'absolute', top:'0', left:'0', width:'100vw', height:'100vh',
+    zIndex:'1000', pointerEvents:'none',
+    backgroundImage:"url('https://pngimg.com/uploads/broken_glass/broken_glass_PNG27.png')",
+    backgroundSize:'cover', backgroundPosition:'center',
+    opacity:'0', transition:'opacity 0.2s'
+});
 document.body.appendChild(hitOverlay);
 
-const hitSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2747/2747-preview.mp3'); // Glass break or impact
-
+// ─── FIRE ─────────────────────────────────────────────────────────────────────
 fireBtn.addEventListener('click', (e) => {
-    e.preventDefault(); // Prevent accidental scrolling/focus
+    e.preventDefault();
     fireBtn.style.transform = "translateX(-50%) scale(0.9)";
     setTimeout(() => fireBtn.style.transform = "translateX(-50%) scale(1)", 100);
 
-    // RELOAD CHECK FIRST (Can reload even if empty)
-    if (lockedTargetId === 0) {
-        handleHit(0);
-        return;
-    }
+    // Reload special
+    if (lockedTargetId === 0) { handleHit(0); return; }
 
     if (ammo <= 0) {
         showFeedback("NO AMMO - SCAN RELOAD (ID 0)", "#ffaa00");
-        // Play "Clic-Clic"
-        emptySound.currentTime = 0;
-        emptySound.play().catch(() => { });
-        setTimeout(() => {
-            emptySound.currentTime = 0;
-            emptySound.play().catch(() => { });
-        }, 150);
+        emptySound.currentTime = 0; emptySound.play().catch(()=>{});
+        setTimeout(() => { emptySound.currentTime = 0; emptySound.play().catch(()=>{}); }, 150);
         return;
     }
 
-    // FIRE
     shootSound.currentTime = 0;
-    shootSound.play().catch(e => console.log('Audio play failed', e));
+    shootSound.play().catch(e => {});
 
     if (lockedTargetId !== null) {
         handleHit(lockedTargetId);
     } else {
-        // MISS
         ammo--;
         updateAmmoDisplay();
         showFeedback("MISS", "#fff");
     }
 });
 
-// Globals
+// ─── HANDLE HIT ──────────────────────────────────────────────────────────────
 let isAdminMode = false;
-
-const boomSound = new Audio('https://assets.mixkit.co/active_storage/sfx/1698/1698-preview.mp3'); // Explosion
 
 function handleHit(markerId) {
     console.log("Marker Found:", markerId);
 
-    // ADMIN MODE ACTIVATION (Marker 256)
     if (markerId === 256) {
         isAdminMode = true;
         showFeedback("MODE ADMIN ACTIVÉ\nTIREZ SUR UNE ZONE", "cyan");
         return;
     }
 
-    // RELOAD LOGIC (Marker 0)
     if (markerId === 0) {
         ammo = MAX_AMMO;
         updateAmmoDisplay();
         showFeedback("RELOADED", "#00ff00");
         const reloadSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2579/2579-preview.mp3');
-        reloadSound.play().catch(e => { });
+        reloadSound.play().catch(()=>{});
         return;
     }
 
-    // HIT SOUND (For valid targets)
     if (markerId > 0 && markerId < 256) {
         boomSound.currentTime = 0;
-        boomSound.play().catch(e => { });
+        boomSound.play().catch(()=>{});
     }
 
-    if (ammo > 0 || isAdminMode) { // Admin can shoot even without ammo to place zone? "meme sans balle de dispo" -> Yes.
-        if (!isAdminMode) {
-            ammo--;
-            updateAmmoDisplay();
-        }
+    if (ammo > 0 || isAdminMode) {
+        if (!isAdminMode) { ammo--; updateAmmoDisplay(); }
 
         if (markerId >= 200) {
-            // Send Coords for Zone (and Admin Flag)
             socket.emit('shoot', { id: markerId, lat: myLat, lon: myLon, placing: isAdminMode });
-            if (isAdminMode) {
-                isAdminMode = false; // Consume flag
-                showFeedback("PLACEMENT EN COURS...", "orange");
-            }
+            if (isAdminMode) { isAdminMode = false; showFeedback("PLACEMENT EN COURS...", "orange"); }
         } else {
             socket.emit('shoot', markerId);
         }
@@ -834,22 +579,17 @@ function handleHit(markerId) {
     }
 }
 
+// ─── SOCKET EVENTS ────────────────────────────────────────────────────────────
+
 socket.on('hit', (data) => {
-    console.log("I WAS HIT!");
-    // Vibrate
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-
-    // Play Sound
     hitSound.currentTime = 0;
-    hitSound.play().catch(() => { });
+    hitSound.play().catch(()=>{});
 
-    // Show Effect (Blood/Damage)
     hitOverlay.style.transition = 'none';
     hitOverlay.style.opacity = '1';
-    hitOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-    hitOverlay.innerHTML = "<h1 style='color:red; font-size:5rem; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-shadow:0 0 20px black;'>HIT!</h1>";
-
-    // Shake screen
+    hitOverlay.style.backgroundColor = 'rgba(255,0,0,0.5)';
+    hitOverlay.innerHTML = `<h1 style='color:red;font-size:5rem;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-shadow:0 0 20px black'>${data.lethal ? 'HIT FATAL!' : 'TOUCHÉ!'}</h1>`;
     document.body.style.animation = "shake 0.5s cubic-bezier(.36,.07,.19,.97) both";
 
     setTimeout(() => {
@@ -857,123 +597,48 @@ socket.on('hit', (data) => {
         hitOverlay.style.opacity = '0';
         hitOverlay.style.backgroundColor = 'transparent';
         document.body.style.animation = "none";
-        setTimeout(() => hitOverlay.innerHTML = "", 1000); // Clear text after fade
+        setTimeout(() => hitOverlay.innerHTML = "", 1000);
     }, 1000);
+});
+
+socket.on('playerDied', (data) => {
+    showDeadOverlay(data.msg);
+});
+
+socket.on('playerRespawn', (data) => {
+    hideDeadOverlay();
+    if (data && data.healer) showFeedback(`SOIGNÉ PAR ${data.healer} !`, "lime");
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+});
+
+socket.on('teamChanged', (data) => {
+    // Paint mode: our color was assigned for the first time
+    myTeam = data.newTeam;
+    const myIdDisplay = document.getElementById('my-id-display');
+    if (myIdDisplay) myIdDisplay.innerText = "ID: " + data.newMarkerId;
+    updateTeamDisplay(data.newTeam);
+    showFeedback(`COULEUR: ${data.newTeam.toUpperCase()}`, data.newTeam === 'green' ? '#00ff88' : '#4488ff');
 });
 
 socket.on('shotFeedback', (data) => {
     showFeedback(data.msg, data.color);
 });
 
-function showFeedback(text, color) {
-    // Handling newlines in text by converting to HTML break tags if needed, 
-    // but innerText handles \n as lines mostly. 
-    // Let's ensure formatting.
-    feedbackMsg.innerText = text;
-    feedbackMsg.style.color = color;
-    feedbackMsg.classList.remove('hidden');
-
-    // Reset animation
-    feedbackMsg.style.animation = 'none';
-    feedbackMsg.offsetHeight; /* trigger reflow */
-    feedbackMsg.style.animation = 'popup 1.5s ease-out forwards'; // Message lasts a bit longer
-
-    setTimeout(() => {
-        feedbackMsg.classList.add('hidden');
-    }, 1500);
-}
-
-// --- SOCKET EVENTS ---
-// --- SOCKET EVENTS ---
-
-socket.on('gameOver', (data) => {
-    const me = data.players[socket.id];
-
-    // Create overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'game-over-screen';
-
-    // Determine winner text
-    let winnerText = "";
-    let color = "#fff";
-
-    if (data.winner === 'draw') {
-        winnerText = "ÉGALITÉ";
-    } else if (data.winner === 'red') {
-        winnerText = "VICTOIRE ROUGE";
-        color = "var(--primary-red)";
-    } else {
-        winnerText = "VICTOIRE BLEUE";
-        color = "var(--primary-blue)";
-    }
-
-    overlay.innerHTML = `
-        <div class="winner-title" style="color: ${color}">${winnerText}</div>
-        
-        <div class="stats-container">
-            <h3 style="border-bottom: 2px solid var(--neon-cyan); padding-bottom: 10px;">RAPPORT DE MISSION</h3>
-            <div class="stats-grid">
-                <div class="stat-item">SCORE <span class="stat-value">${me ? me.score : 0}</span></div>
-                <div class="stat-item">ÉLIMINATIONS <span class="stat-value">${me ? me.kills : 0}</span></div>
-                <div class="stat-item">MORTS <span class="stat-value">${me ? me.deaths : 0}</span></div>
-                <div class="stat-item">ZONES <span class="stat-value">${me ? me.captures : 0}</span></div>
-            </div>
-            
-            <div style="margin-top: 20px; font-size: 1rem; color: #aaa;">
-                ROUGE: ${data.finalScores.red} pts <br>
-                BLEU: ${data.finalScores.blue} pts
-            </div>
-        </div>
-
-        <button class="btn primary" style="margin-top: 30px" onclick="location.reload()">RETOUR BASE</button>
-    `;
-
-    document.body.appendChild(overlay);
-});
-
 socket.on('assignedId', (data) => {
-    // data: { id: 256, team: 'red' }
     const myIdDisplay = document.getElementById('my-id-display');
     if (myIdDisplay) myIdDisplay.innerText = "ID: " + data.id;
-
-    // Update Client State
     myTeam = data.team;
+    if (data.gameMode) myGameMode = data.gameMode;
     updateTeamDisplay(data.team);
-
-    let teamLabel = document.getElementById('my-team');
-    if (teamLabel) teamLabel.innerText = data.team.toUpperCase();
-
     showFeedback(`ID ASSIGNÉ: ${data.id}`, "#00ffff");
 });
 
 socket.on('gameState', (data) => {
-    // data: { players, zones, zoneCoords, redZoneCount, blueZoneCount }
-    if (data.points) { /* legacy check? */ }
-    // Update Globals
-    if (data.zones) globalZones = data.zones;
+    if (data.gameMode) myGameMode = data.gameMode;
+    if (data.zones)      globalZones     = data.zones;
     if (data.zoneCoords) globalZoneCoords = data.zoneCoords;
-    if (data.players) globalPlayers = Object.values(data.players);
-
-    if (data.redZoneCount !== undefined) redZones = data.redZoneCount;
-    if (data.blueZoneCount !== undefined) blueZones = data.blueZoneCount;
-
-    // Also update scores from players list if provided in gameState to be safe
-    // But usually players list is separate or included.
-    // My server gameState format includes 'players' object
-
-    // Update Scores from gameState.players
-    if (data.players) {
-        let rs = 0;
-        let bs = 0;
-        Object.values(data.players).forEach(p => {
-            if (p.team === 'red') rs += p.score;
-            if (p.team === 'blue') bs += p.score;
-        });
-        redScore = rs;
-        blueScore = bs;
-    }
-
-    updateScoreBoard();
+    if (data.players)    globalPlayers    = Object.values(data.players);
+    updateScoreBoard(data);
     if (data.players) updateMiniMap(Object.values(data.players));
 });
 
@@ -981,228 +646,183 @@ socket.on('playerList', (players) => {
     updateMiniMap(players);
 });
 
+socket.on('gameOver', (data) => {
+    const me = data.players[socket.id];
+    const overlay = document.createElement('div');
+    overlay.className = 'game-over-screen';
+
+    let winnerText = "ÉGALITÉ";
+    let color = "#fff";
+    const mode = data.gameMode || myGameMode;
+
+    if (mode === 'paint') {
+        if (data.winner === 'green') { winnerText = "🟢 VICTOIRE VERTE";  color = "#00ff88"; }
+        else if (data.winner === 'blue')  { winnerText = "🔵 VICTOIRE BLEUE"; color = "#4488ff"; }
+        else { winnerText = "🤝 ÉGALITÉ"; }
+    } else {
+        if (data.winner === 'red')   { winnerText = "🔴 VICTOIRE ROUGE"; color = "#ff4444"; }
+        else if (data.winner === 'blue') { winnerText = "🔵 VICTOIRE BLEUE"; color = "#4488ff"; }
+        else { winnerText = "🤝 ÉGALITÉ"; }
+    }
+
+    const fs = data.finalScores || {};
+    const scoresHTML = (mode === 'paint')
+        ? `VERT: ${fs.green ?? 0} pts &nbsp;|&nbsp; BLEU: ${fs.blue ?? 0} pts`
+        : `ROUGE: ${fs.red ?? 0} pts &nbsp;|&nbsp; BLEU: ${fs.blue ?? 0} pts`;
+
+    overlay.innerHTML = `
+        <div class="winner-title" style="color:${color}">${winnerText}</div>
+        <div class="stats-container">
+            <h3 style="border-bottom:2px solid #67e8f9;padding-bottom:10px">RAPPORT DE MISSION</h3>
+            <div class="stats-grid">
+                <div class="stat-item">SCORE <span class="stat-value">${me ? me.score : 0}</span></div>
+                <div class="stat-item">ÉLIMINATIONS <span class="stat-value">${me ? me.kills : 0}</span></div>
+                <div class="stat-item">MORTS <span class="stat-value">${me ? me.deaths : 0}</span></div>
+                <div class="stat-item">ZONES <span class="stat-value">${me ? me.captures : 0}</span></div>
+            </div>
+            <div style="margin-top:20px;font-size:1rem;color:#aaa">${scoresHTML}</div>
+        </div>
+        <button class="btn primary" style="margin-top:30px" onclick="location.reload()">RETOUR BASE</button>
+    `;
+    document.body.appendChild(overlay);
+});
+
+// ─── MINIMAP ──────────────────────────────────────────────────────────────────
 function updateMiniMap(players) {
     const map = document.getElementById('mini-map');
+    document.querySelectorAll('.player-marker, .zone-marker').forEach(m => m.remove());
 
-    // Clear old markers
-    const oldMarkers = document.querySelectorAll('.player-marker, .zone-marker');
-    oldMarkers.forEach(m => m.remove());
-
-    // Ensure radar line and center cross
     if (!map.querySelector('.radar-line')) {
         const radar = document.createElement('div');
         radar.className = 'radar-line';
         map.appendChild(radar);
-
         const center = document.createElement('div');
-        center.style.position = 'absolute';
-        center.style.top = '50%';
-        center.style.left = '50%';
-        center.style.width = '6px';
-        center.style.height = '6px';
-        center.style.background = 'white';
-        center.style.borderRadius = '50%';
-        center.style.transform = 'translate(-50%, -50%)';
-        center.style.boxShadow = '0 0 4px black';
-        center.style.zIndex = '5';
+        Object.assign(center.style, { position:'absolute', top:'50%', left:'50%', width:'6px', height:'6px', background:'white', borderRadius:'50%', transform:'translate(-50%,-50%)', boxShadow:'0 0 4px black', zIndex:'5' });
         map.appendChild(center);
-
-        // Distance Rings (12.5m, 25m, 50m diameters)
-        // Map Radius = 50m. Map Diameter = 100m.
-        // CSS Width = Diameter in meters (since 1m = 1%)
-        const diameters = [12.5, 25, 50];
-        diameters.forEach(d => {
+        [12.5, 25, 50].forEach(d => {
             const ring = document.createElement('div');
             ring.className = 'radar-ring';
-            ring.style.position = 'absolute';
-            ring.style.top = '50%';
-            ring.style.left = '50%';
-            ring.style.transform = 'translate(-50%, -50%)';
-            ring.style.width = d + '%';
-            ring.style.height = d + '%';
-            ring.style.borderRadius = '50%';
-            ring.style.border = '1px dashed rgba(255, 255, 255, 0.3)';
-            ring.style.pointerEvents = 'none';
-            ring.style.boxSizing = 'border-box';
+            Object.assign(ring.style, { position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:d+'%', height:d+'%', borderRadius:'50%', border:'1px dashed rgba(255,255,255,0.3)', pointerEvents:'none', boxSizing:'border-box' });
             map.appendChild(ring);
         });
     }
 
-    // Dynamic North Marker (Update every frame)
     let north = map.querySelector('.north-marker');
     if (!north) {
         north = document.createElement('div');
         north.className = 'north-marker';
         north.innerText = 'N';
-        north.style.position = 'absolute';
-        north.style.color = 'red';
-        north.style.fontWeight = 'bold';
-        north.style.fontSize = '12px';
-        north.style.transform = 'translate(-50%, -50%)';
+        Object.assign(north.style, { position:'absolute', color:'red', fontWeight:'bold', fontSize:'12px', transform:'translate(-50%,-50%)' });
         map.appendChild(north);
     }
-
-    // Calculate North Position
     const theta_rad = (currentHeading || 0) * Math.PI / 180;
     const nav_angle = -Math.PI / 2 - theta_rad;
-    const n_px = 45 * Math.cos(nav_angle);
-    const n_py = 45 * Math.sin(nav_angle);
-    north.style.left = (50 + n_px) + '%';
-    north.style.top = (50 + n_py) + '%';
+    north.style.left = (50 + 45 * Math.cos(nav_angle)) + '%';
+    north.style.top  = (50 + 45 * Math.sin(nav_angle)) + '%';
 
-    // DEBUG: Stats & SHOW PLAYER COUNT
     const debugEl = document.getElementById('game-code-display');
-    if (debugEl) {
-        const zCount = globalZoneCoords ? Object.keys(globalZoneCoords).length : 0;
-        debugEl.innerText = `CODE: ${activeGameCode || '?'} | H: ${Math.round(currentHeading)} | P: ${players.length}`;
-    }
+    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | H: ${Math.round(currentHeading)} | P: ${players.length}`;
 
-    // GPS Check
-    if (!myLat || !myLon) {
-        // Continue even if no GPS to show others at fallback pos
-    }
-
-    // ZONE LOGIC (Prep)
     const R_h = 6371e3;
     const maxDist_h = 50;
     const scale_h = 50 / maxDist_h;
     const theta_h = (currentHeading || 0) * Math.PI / 180;
 
     const project = (lat, lon) => {
-        // Fallback to 0 if missing (prevents NaN)
-        const pLat = lat || 0;
-        const pLon = lon || 0;
-        const mLat = myLat || 0;
-        const mLon = myLon || 0;
-
+        const pLat = lat || 0, pLon = lon || 0, mLat = myLat || 0, mLon = myLon || 0;
         const dLat = (pLat - mLat) * Math.PI / 180;
         const dLon = (pLon - mLon) * Math.PI / 180;
         const dx = dLon * Math.cos((mLat + pLat) / 2 * Math.PI / 180) * R_h;
         const dy = dLat * R_h;
-
         const rx = dx * Math.cos(theta_h) - dy * Math.sin(theta_h);
         const ry = dx * Math.sin(theta_h) + dy * Math.cos(theta_h);
-
-        let px = rx * scale_h;
-        let py = -ry * scale_h;
-
-        const dist = Math.sqrt(px * px + py * py);
-        if (dist > 40) { // SAFE MARGIN Clamping
-            const angle = Math.atan2(py, px);
-            px = 40 * Math.cos(angle);
-            py = 40 * Math.sin(angle);
-        }
+        let px = rx * scale_h, py = -ry * scale_h;
+        const dist = Math.sqrt(px*px + py*py);
+        if (dist > 40) { const a = Math.atan2(py,px); px=40*Math.cos(a); py=40*Math.sin(a); }
         return { px, py };
     };
 
-    // 1. DRAW ZONES
     if (globalZoneCoords) {
         Object.entries(globalZoneCoords).forEach(([id, coords]) => {
-            if (coords && coords.lat) {
-                const pos = project(coords.lat, coords.lon);
-
-                const marker = document.createElement('div');
-                marker.className = 'zone-marker';
-                marker.style.position = 'absolute';
-                marker.style.width = '12px';
-                marker.style.height = '12px';
-
-                let color = 'orange';
-                if (globalZones && globalZones[id] === 'red') color = 'var(--primary-red)';
-                if (globalZones && globalZones[id] === 'blue') color = 'var(--primary-blue)';
-                marker.style.backgroundColor = color;
-                marker.style.border = '2px solid white';
-                marker.style.transform = 'translate(-50%, -50%)';
-                marker.style.zIndex = '4';
-                marker.style.left = (50 + pos.px) + '%';
-                marker.style.top = (50 + pos.py) + '%';
-
-                marker.innerText = id;
-                marker.style.fontSize = '8px';
-                marker.style.color = 'black';
-                marker.style.display = 'flex';
-                marker.style.justifyContent = 'center';
-                marker.style.alignItems = 'center';
-                marker.style.fontWeight = 'bold';
-
-                const mapRef = document.getElementById('mini-map');
-                if (mapRef) mapRef.appendChild(marker);
-            }
+            if (!coords || !coords.lat) return;
+            const pos = project(coords.lat, coords.lon);
+            const marker = document.createElement('div');
+            marker.className = 'zone-marker';
+            let color = 'orange';
+            if (globalZones && globalZones[id] === 'red')   color = '#ff4444';
+            if (globalZones && globalZones[id] === 'blue')  color = '#4488ff';
+            if (globalZones && globalZones[id] === 'green') color = '#00ff88';
+            Object.assign(marker.style, { position:'absolute', width:'12px', height:'12px', backgroundColor:color, border:'2px solid white', transform:'translate(-50%,-50%)', zIndex:'4', left:(50+pos.px)+'%', top:(50+pos.py)+'%', fontSize:'8px', color:'black', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold' });
+            marker.innerText = id;
+            map.appendChild(marker);
         });
     }
 
-    // 2. DRAW PLAYERS
     const myIdDisplay = document.getElementById('my-id-display');
     players.forEach(p => {
-        const isMe = (p.id === socket.id) || (myIdDisplay && parseInt(myIdDisplay.innerText.replace('ID: ', '')) === p.markerId);
-
+        const isMe = (p.id === socket.id) || (myIdDisplay && parseInt(myIdDisplay.innerText.replace('ID: ','')) === p.markerId);
         if (isMe) return;
-
         const pos = project(p.lat, p.lon);
-
         const marker = document.createElement('div');
         marker.className = `player-marker ${p.team}`;
         marker.innerText = p.markerId;
 
-        // Ensure Visibility (Explicit Styles)
-        marker.style.position = 'absolute';
-        marker.style.width = '14px';
-        marker.style.height = '14px';
-        marker.style.borderRadius = '50%';
-        marker.style.backgroundColor = (p.team === 'red') ? 'var(--primary-red)' : 'var(--primary-blue)';
-        marker.style.border = '2px solid white';
-        marker.style.zIndex = '6';
+        let dotColor = '#4488ff'; // default blue
+        if (p.team === 'red')   dotColor = '#ff4444';
+        if (p.team === 'green') dotColor = '#00cc66';
+        if (!p.alive)           dotColor = '#555'; // dead players are gray
 
-        marker.style.fontSize = '9px';
-        marker.style.fontWeight = 'bold';
-        marker.style.color = '#fff';
-        marker.style.display = 'flex';
-        marker.style.justifyContent = 'center';
-        marker.style.alignItems = 'center';
-
-        marker.style.left = (50 + pos.px) + '%';
-        marker.style.top = (50 + pos.py) + '%';
-
-        const mapRef = document.getElementById('mini-map');
-        if (mapRef) mapRef.appendChild(marker);
+        Object.assign(marker.style, {
+            position:'absolute', width:'14px', height:'14px', borderRadius:'50%',
+            backgroundColor: dotColor, border:'2px solid white', zIndex:'6',
+            fontSize:'9px', fontWeight:'bold', color:'#fff', display:'flex',
+            justifyContent:'center', alignItems:'center',
+            left:(50+pos.px)+'%', top:(50+pos.py)+'%',
+            opacity: p.alive ? '1' : '0.4'
+        });
+        map.appendChild(marker);
     });
 }
 
-// Remove random logic, rely on server assignment
-
+// ─── TEAM DISPLAY ────────────────────────────────────────────────────────────
 function updateTeamDisplay(team) {
     const el = document.getElementById('my-team');
-    if (el) {
-        el.innerText = team.toUpperCase();
-        el.style.color = team === 'red' ? 'var(--primary-red)' : 'var(--primary-blue)';
-    }
+    if (!el) return;
+    el.innerText = team.toUpperCase();
+    const colors = { red:'#ff4444', blue:'#4488ff', green:'#00cc66', spectator:'#aaa' };
+    el.style.color = colors[team] || '#fff';
 }
 
+// ─── AMMO ─────────────────────────────────────────────────────────────────────
 function updateAmmoDisplay() {
     const el = document.getElementById('ammo-count');
-    if (el) {
-        el.innerText = ammo + "/" + MAX_AMMO;
-        if (ammo === 0) el.style.color = 'red';
-        else el.style.color = '#60a5fa'; // Blue-400 equivalent for "normal" state
-    }
+    if (!el) return;
+    el.innerText = ammo + "/" + MAX_AMMO;
+    el.style.color = (ammo === 0) ? 'red' : '#60a5fa';
 }
 
-// --- UPGRADE MODAL LOGIC ---
-const upgradeModal = document.getElementById('modal-upgrade');
+// ─── SHOW FEEDBACK ────────────────────────────────────────────────────────────
+function showFeedback(text, color) {
+    feedbackMsg.innerText = text;
+    feedbackMsg.style.color = color;
+    feedbackMsg.classList.remove('hidden');
+    feedbackMsg.style.animation = 'none';
+    feedbackMsg.offsetHeight; /* reflow */
+    feedbackMsg.style.animation = 'popup 1.5s ease-out forwards';
+    setTimeout(() => feedbackMsg.classList.add('hidden'), 1500);
+}
+
+// ─── UPGRADE MODAL ────────────────────────────────────────────────────────────
+const upgradeModal   = document.getElementById('modal-upgrade');
 const upgradeReasonEl = document.getElementById('upgrade-reason');
-const upgradeInputEl = document.getElementById('upgrade-code-input');
+const upgradeInputEl  = document.getElementById('upgrade-code-input');
 const btnSubmitUpgradeEl = document.getElementById('btn-submit-upgrade');
 const btnCancelUpgradeEl = document.getElementById('btn-cancel-upgrade');
 
 if (socket) {
     socket.on('askForCode', (data) => {
-        if (upgradeModal) {
-            upgradeModal.classList.remove('hidden');
-            if (upgradeReasonEl) upgradeReasonEl.innerText = data.msg || "Mise à niveau requise";
-            if (upgradeInputEl) upgradeInputEl.value = "";
-        }
+        if (upgradeModal) { upgradeModal.classList.remove('hidden'); if (upgradeReasonEl) upgradeReasonEl.innerText = data.msg || "Mise à niveau requise"; if (upgradeInputEl) upgradeInputEl.value = ""; }
     });
-
     socket.on('planUnlocked', (data) => {
         if (upgradeModal) upgradeModal.classList.add('hidden');
         if (typeof showFeedback === 'function') showFeedback(data.msg, "#4ade80");
@@ -1212,14 +832,9 @@ if (socket) {
 if (btnSubmitUpgradeEl) {
     btnSubmitUpgradeEl.addEventListener('click', () => {
         const code = upgradeInputEl ? upgradeInputEl.value : "";
-        if (code && code.trim().length > 0) {
-            socket.emit('unlockPlan', { gameCode: activeGameCode, code: code });
-        }
+        if (code && code.trim().length > 0) socket.emit('unlockPlan', { gameCode: activeGameCode, code });
     });
 }
-
 if (btnCancelUpgradeEl) {
-    btnCancelUpgradeEl.addEventListener('click', () => {
-        if (upgradeModal) upgradeModal.classList.add('hidden');
-    });
+    btnCancelUpgradeEl.addEventListener('click', () => { if (upgradeModal) upgradeModal.classList.add('hidden'); });
 }
