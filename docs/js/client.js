@@ -626,11 +626,33 @@ socket.on('shotFeedback', (data) => {
 
 socket.on('assignedId', (data) => {
     const myIdDisplay = document.getElementById('my-id-display');
-    if (myIdDisplay) myIdDisplay.innerText = "ID: " + data.id;
-    myTeam = data.team;
     if (data.gameMode) myGameMode = data.gameMode;
-    updateTeamDisplay(data.team);
-    showFeedback(`ID ASSIGNÉ: ${data.id}`, "#00ffff");
+
+    if (data.needsRegistration) {
+        // Player joined but hasn't scanned their QR yet
+        myTeam = data.team;
+        updateTeamDisplay(data.team);
+        if (myIdDisplay) myIdDisplay.innerText = "ID: ???";
+        // Show a persistent prompt overlay
+        showDeadOverlay(
+            myGameMode === 'paint'
+                ? "Scannez votre QR code physique\npour vous enregistrer"
+                : `Scannez votre QR code physique\n(${data.team.toUpperCase()} = ID 1-49, BLUE = 50-99)`
+        );
+        // Override the skull icon text for registration
+        const deadTitleEl = document.querySelector('#dead-overlay .text-red-400');
+        if (deadTitleEl) { deadTitleEl.innerText = 'EN ATTENTE'; deadTitleEl.style.color = '#00ffff'; }
+        const deadIconEl = document.querySelector('#dead-overlay .text-5xl');
+        if (deadIconEl) deadIconEl.innerText = '📡';
+    } else {
+        // Fully registered
+        if (myIdDisplay) myIdDisplay.innerText = "ID: " + data.id;
+        myTeam = data.team;
+        updateTeamDisplay(data.team);
+        // Clear the registration overlay if visible
+        hideDeadOverlay();
+        showFeedback(`ID ASSIGNÉ: ${data.id} | ${data.team.toUpperCase()}`, "#00ffff");
+    }
 });
 
 socket.on('gameState', (data) => {

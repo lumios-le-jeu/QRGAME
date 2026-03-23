@@ -160,20 +160,15 @@ io.on('connection', (socket) => {
 
         // ── ASSIGN TEAM & MARKER ID ──────────────────────────────────────────
         let assignedTeam = data.team;
-        let markerId = -1;
-        const usedIds = Object.values(game.players).map(p => p.markerId);
+        let markerId = -1; // Will be assigned when player scans their own QR
 
         if (data.team === 'spectator' || data.username === 'Admin') {
             assignedTeam = 'spectator';
             markerId = 256;
         } else if (game.gameMode === 'paint') {
-            // Everyone starts RED in paint mode
-            assignedTeam = 'red';
-            for (let i = 1; i <= 49; i++) {
-                if (!usedIds.includes(i)) { markerId = i; break; }
-            }
+            assignedTeam = 'red'; // Everyone starts RED — ID assigned on self-scan
         } else {
-            // CTF: auto-balance between red and blue
+            // CTF: auto-balance team, ID assigned on self-scan
             if (!assignedTeam || assignedTeam === 'auto' || assignedTeam === 'null') {
                 const players = Object.values(game.players);
                 const redCount  = players.filter(p => p.team === 'red').length;
@@ -183,27 +178,13 @@ io.on('connection', (socket) => {
                 else                            assignedTeam = Math.random() < 0.5 ? 'red' : 'blue';
                 console.log(`[AUTO-BALANCE CTF] R(${redCount}) vs B(${blueCount}) -> ${assignedTeam}`);
             }
-            if (assignedTeam === 'red') {
-                for (let i = 1; i <= 49; i++) {
-                    if (!usedIds.includes(i)) { markerId = i; break; }
-                }
-            } else {
-                for (let i = 50; i <= 99; i++) {
-                    if (!usedIds.includes(i)) { markerId = i; break; }
-                }
-            }
-        }
-
-        if (markerId === -1) {
-            socket.emit('error', `Aucun ID disponible pour l'équipe ${assignedTeam}`);
-            return;
         }
 
         game.players[socket.id] = {
             id: socket.id,
             username: data.username,
             team: assignedTeam,
-            markerId,
+            markerId, // -1 until self-scan
             score: 0,
             ammo: 6,
             lives: 3,
@@ -214,13 +195,14 @@ io.on('connection', (socket) => {
             lon: data.lon || 0,
             lastHitTime: 0,
             // ── State flags ──
-            alive: true,             // true = can shoot & be shot lethally
-            pendingRespawn: false,   // CTF: waiting for zone scan to respawn
-            colorAssigned: (game.gameMode === 'paint') ? false : true // Paint: not colored yet
+            alive: true,
+            pendingRespawn: false,
+            colorAssigned: (game.gameMode === 'paint') ? false : true
         };
 
-        socket.emit('assignedId', { id: markerId, team: assignedTeam, gameMode: game.gameMode });
-        console.log(`${data.username} joined game ${actualGameCode} (Team ${assignedTeam}) - ID: ${markerId}`);
+        // Tell client to wait for self-scan
+        socket.emit('assignedId', { id: -1, team: assignedTeam, gameMode: game.gameMode, needsRegistration: true });
+        console.log(`${data.username} joined game ${actualGameCode} (Team ${assignedTeam}) - Waiting for self-scan`);
 
         io.to(actualGameCode).emit('playerList', Object.values(game.players));
         io.to(actualGameCode).emit('gameState', buildGameState(game));
@@ -282,6 +264,38 @@ io.on('connection', (socket) => {
 
         const shooter = game.players[socket.id];
         if (!shooter) return;
+
+        // ════════════════════════════════════════════════
+        //  SELF-REGISTRATION (first scan of own QR)
+        //  Player scans a player marker (1-199) while unregistered
+        // ════════════════════════════════════════════════
+        if (shooter.markerId === -1 && targetId >= 1 && targetId <= 199) {
+            const usedIds = Object.values(game.players).map(p => p.markerId);
+            if (usedIds.includes(targetId)) {
+                socket.emit('shotFeedback', { msg: `ID ${targetId} DÉJÀ PRIS\nChoisissez un autre QR`, color: 'orange' });
+                return;
+            }
+            // Assign the ID
+            shooter.markerId = targetId;
+            // CTF: derive team from ID range
+            if (game.gameMode === 'ctf') {
+                if (targetId >= 1 && targetId <= 49)   shooter.team = 'red';
+                else if (targetId >= 50 && targetId <= 99) shooter.team = 'blue';
+            }
+            // Paint: keep 'red', ID locked here
+            socket.emit('assignedId', { id: targetId, team: shooter.team, gameMode: game.gameMode, needsRegistration: false });
+            socket.emit('shotFeedback', { msg: `ENREGISTRÉ !\nID: ${targetId} | ${shooter.team.toUpperCase()}`, color: 'lime' });
+            io.to(gameCode).emit('playerList', Object.values(game.players));
+            io.to(gameCode).emit('gameState', buildGameState(game));
+            console.log(`[REGISTER][${gameCode}] ${shooter.username} claimed ID ${targetId} (${shooter.team})`);
+            return;
+        }
+
+        // Unregistered players can only self-scan
+        if (shooter.markerId === -1) {
+            socket.emit('shotFeedback', { msg: "SCANNEZ VOTRE QR\npour vous enregistrer", color: 'cyan' });
+            return;
+        }
 
         // ── Dead shooter can't shoot (both modes) ────────────────────────────
         if (!shooter.alive && shooter.team !== 'spectator') {
@@ -433,46 +447,32 @@ io.on('connection', (socket) => {
 
             // ── Target is RED (uncolored) → first hit assigns color ──────────
             if (!target.colorAssigned) {
-                // Assign opposite color to shooter if shooter is colored, else random
+                // Assign opposite color to shooter if shooter is colored, else balance
                 let newColor;
                 if (shooter.team === 'green')       newColor = 'blue';
                 else if (shooter.team === 'blue')   newColor = 'green';
                 else {
-                    // Shooter is also red → pure random, but try to balance
                     const greenCount = Object.values(game.players).filter(p => p.team === 'green').length;
                     const blueCount  = Object.values(game.players).filter(p => p.team === 'blue').length;
-                    if (greenCount < blueCount)     newColor = 'green';
+                    if (greenCount < blueCount)      newColor = 'green';
                     else if (blueCount < greenCount) newColor = 'blue';
-                    else                            newColor = Math.random() < 0.5 ? 'green' : 'blue';
+                    else                             newColor = Math.random() < 0.5 ? 'green' : 'blue';
                 }
 
-                // Reassign markerId to new team range
-                const usedIds = Object.values(game.players).map(p => p.markerId);
-                let newMarkerId = target.markerId; // fallback
-                if (newColor === 'green') {
-                    for (let i = 50; i <= 99; i++) {
-                        if (!usedIds.includes(i) || i === target.markerId) { newMarkerId = i; break; }
-                    }
-                } else {
-                    for (let i = 100; i <= 149; i++) {
-                        if (!usedIds.includes(i)) { newMarkerId = i; break; }
-                    }
-                }
-
+                // Keep the original markerId — QR code doesn't change!
                 target.team = newColor;
-                target.markerId = newMarkerId;
                 target.colorAssigned = true;
-                target.lastHitTime = now; // immunity after color change
-                target.score += 0;
+                target.lastHitTime = now;
                 shooter.score += 10;
                 shooter.kills += 1;
 
                 socket.emit('shotFeedback', { msg: `${target.username} → ${newColor.toUpperCase()}\n+10 PTS`, color: newColor === 'green' ? '#00ff88' : '#4488ff' });
-                io.to(targetSocketId).emit('teamChanged', { newTeam: newColor, newMarkerId });
+                // Send teamChanged with same markerId so client stays in sync
+                io.to(targetSocketId).emit('teamChanged', { newTeam: newColor, newMarkerId: target.markerId });
                 io.to(targetSocketId).emit('hit', { shooter: shooter.username, lethal: false });
 
                 io.to(gameCode).emit('gameState', buildGameState(game));
-                console.log(`[PAINT][${gameCode}] ${target.username} colored ${newColor} by ${shooter.username}`);
+                console.log(`[PAINT][${gameCode}] ${target.username} colored ${newColor} by ${shooter.username} (ID ${target.markerId} unchanged)`);
                 return;
             }
 
