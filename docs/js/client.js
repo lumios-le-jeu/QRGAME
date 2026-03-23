@@ -4,7 +4,7 @@ const GAME_SERVER_URL = (location.hostname === "localhost" || location.hostname 
     : "https://fun.qrshotgame.fr";
 
 const socket = io(GAME_SERVER_URL);
-console.log("v1.1.0 - BUILD: 2026-03-23 | MODE: REGISTER");
+console.log("v1.1.1 - BUILD: 2026-03-24 | MODE: REGISTER");
 
 socket.on("connect_error", (err) => {
     console.error("Server Connection Failed:", err);
@@ -627,6 +627,7 @@ socket.on('shotFeedback', (data) => {
 
 socket.on('assignedId', (data) => {
     const myIdDisplay = document.getElementById('my-id-display');
+    const deadOverlay = document.getElementById('dead-overlay');
     if (data.gameMode) myGameMode = data.gameMode;
 
     if (data.needsRegistration) {
@@ -634,12 +635,21 @@ socket.on('assignedId', (data) => {
         myTeam = data.team;
         updateTeamDisplay(data.team);
         if (myIdDisplay) myIdDisplay.innerText = "ID: ???";
-        // Show a persistent prompt overlay
+        
+        // Show a non-blocking prompt at the top
         showDeadOverlay(
             myGameMode === 'paint'
                 ? "Scannez votre QR code physique\npour vous enregistrer"
                 : `Scannez votre QR code physique\n(${data.team.toUpperCase()} = ID 1-49, BLUE = 50-99)`
         );
+        
+        // Move overlay to top to avoid blocking crosshair
+        if (deadOverlay) {
+            deadOverlay.style.justifyContent = 'flex-start';
+            deadOverlay.style.paddingTop = '10vh';
+            deadOverlay.style.pointerEvents = 'none'; // Ensure clicks pass through
+        }
+
         // Override the skull icon text for registration
         const deadTitleEl = document.querySelector('#dead-overlay .text-red-400');
         if (deadTitleEl) { deadTitleEl.innerText = 'EN ATTENTE'; deadTitleEl.style.color = '#00ffff'; }
@@ -650,7 +660,12 @@ socket.on('assignedId', (data) => {
         if (myIdDisplay) myIdDisplay.innerText = "ID: " + data.id;
         myTeam = data.team;
         updateTeamDisplay(data.team);
-        // Clear the registration overlay if visible
+        
+        // Reset overlay position and hide it
+        if (deadOverlay) {
+            deadOverlay.style.justifyContent = 'center';
+            deadOverlay.style.paddingTop = '0';
+        }
         hideDeadOverlay();
         showFeedback(`ID ASSIGNÉ: ${data.id} | ${data.team.toUpperCase()}`, "#00ffff");
     }
