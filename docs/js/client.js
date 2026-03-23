@@ -479,6 +479,15 @@ function aimLoop() {
                     processingCtx.fillText("ID:"+m.id, c[0].x, c[0].y);
                 }
                 lockedTargetId = id;
+                
+                // --- AUTO-REGISTRATION ---
+                // If we are waiting for registration and see a valid player marker (1-199)
+                const idDisplay = document.getElementById('my-id-display');
+                if (idDisplay && idDisplay.innerText === "ID: ???" && id >= 1 && id <= 199) {
+                    console.log("AUTO-REGISTERING WITH ID:", id);
+                    if (typeof handleHit === 'function') handleHit(id);
+                }
+
                 if (reticle)   { reticle.style.borderColor="lime"; reticle.style.boxShadow="0 0 25px lime, inset 0 0 10px lime"; reticle.style.borderWidth="2px"; }
                 if (scanLabel) { scanLabel.innerText="LOCKED [ID:"+id+"]"; scanLabel.style.color="lime"; scanLabel.style.textShadow="0 0 5px lime"; }
             } else {
@@ -759,7 +768,7 @@ function updateMiniMap(players) {
     north.style.top  = (50 + 45 * Math.sin(nav_angle)) + '%';
 
     const debugEl = document.getElementById('game-code-display');
-    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | H: ${Math.round(currentHeading)} | P: ${players.length}`;
+    if (debugEl) debugEl.innerText = `CODE: ${activeGameCode || '?'} | v1.2.0 | H: ${Math.round(currentHeading)} | P: ${players.length}`;
 
     const R_h = 6371e3;
     const maxDist_h = 50;
