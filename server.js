@@ -297,14 +297,18 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // ── Dead shooter can't shoot (both modes) ────────────────────────────
+        // ── Dead shooter can't shoot — EXCEPT for CTF respawn on own zone ────
         if (!shooter.alive && shooter.team !== 'spectator') {
-            if (game.gameMode === 'ctf') {
-                socket.emit('shotFeedback', { msg: "MORT\nScannez votre zone pour revivre", color: 'red' });
-            } else {
-                socket.emit('shotFeedback', { msg: "MORT\nFaites-vous soigner par un équipier", color: 'red' });
+            // Allow dead CTF players with pendingRespawn to reach zone handling below
+            const isZoneScan = (typeof targetId === 'number' && targetId >= 200 && targetId <= 250);
+            if (!(game.gameMode === 'ctf' && shooter.pendingRespawn && isZoneScan)) {
+                if (game.gameMode === 'ctf') {
+                    socket.emit('shotFeedback', { msg: "MORT\nScannez votre zone pour revivre", color: 'red' });
+                } else {
+                    socket.emit('shotFeedback', { msg: "MORT\nFaites-vous soigner par un équipier", color: 'red' });
+                }
+                return;
             }
-            return;
         }
 
         // ════════════════════════════════
@@ -333,18 +337,20 @@ io.on('connection', (socket) => {
                     if (zoneOwner === shooter.team) {
                         shooter.alive = true;
                         shooter.pendingRespawn = false;
-                        shooter.lastHitTime = 0; // clear immunity
+                        shooter.lastHitTime = 0; // clear immunity after respawn
                         socket.emit('shotFeedback', { msg: "RESPAWN !\nVous êtes de retour !", color: 'lime' });
                         socket.emit('playerRespawn', {});
                         io.to(gameCode).emit('gameState', buildGameState(game));
+                        console.log(`[CTF][${gameCode}] ${shooter.username} RESPAWNED on zone ${targetId} (${zoneOwner})`);
                         return;
                     } else {
-                        socket.emit('shotFeedback', { msg: `PAS VOTRE ZONE\nCapturez-en une pour revivre`, color: 'orange' });
+                        const ownerLabel = zoneOwner ? zoneOwner.toUpperCase() : 'NEUTRE';
+                        socket.emit('shotFeedback', { msg: `ZONE ${ownerLabel}\nScannez une zone ${shooter.team.toUpperCase()}`, color: 'orange' });
                         return;
                     }
                 }
 
-                // NORMAL CAPTURE
+                // NORMAL CAPTURE (alive player)
                 if (game.zones[targetId] !== shooter.team) {
                     game.zones[targetId] = shooter.team;
                     shooter.score += 50;

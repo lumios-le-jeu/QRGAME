@@ -343,8 +343,8 @@ function showDeadOverlay(msg) {
     const msgEl   = document.getElementById('dead-msg');
     if (overlay) { overlay.classList.remove('hidden'); overlay.style.display = 'flex'; }
     if (msgEl)   msgEl.innerText = msg || "En attente de respawn…";
-    // Disable fire button visually
-    if (fireBtn) { fireBtn.style.opacity = '0.3'; fireBtn.style.pointerEvents = 'none'; }
+    // Disable fire button visually BUT keep it clickable for strategic-zone respawn
+    if (fireBtn) { fireBtn.style.opacity = '0.3'; fireBtn.style.pointerEvents = 'auto'; }
 }
 
 function hideDeadOverlay() {
@@ -488,6 +488,13 @@ function aimLoop() {
                     if (typeof handleHit === 'function') handleHit(id);
                 }
 
+                // --- AUTO-RESPAWN (MORT + ZONE STRATÉGIQUE) ---
+                // If the player is dead and scans a strategic zone (ID >= 200), trigger respawn automatically
+                if (!myAlive && id >= 200) {
+                    console.log("AUTO-RESPAWN: dead player scanned strategic zone", id);
+                    socket.emit('shoot', { id: id, lat: myLat, lon: myLon, placing: false });
+                }
+
                 if (reticle)   { reticle.style.borderColor="lime"; reticle.style.boxShadow="0 0 25px lime, inset 0 0 10px lime"; reticle.style.borderWidth="2px"; }
                 if (scanLabel) { scanLabel.innerText="LOCKED [ID:"+id+"]"; scanLabel.style.color="lime"; scanLabel.style.textShadow="0 0 5px lime"; }
             } else {
@@ -526,6 +533,17 @@ fireBtn.addEventListener('click', (e) => {
     e.preventDefault();
     fireBtn.style.transform = "translateX(-50%) scale(0.9)";
     setTimeout(() => fireBtn.style.transform = "translateX(-50%) scale(1)", 100);
+
+    // RESPAWN: dead player fires on a strategic zone to revive
+    if (!myAlive) {
+        if (lockedTargetId !== null && lockedTargetId >= 200) {
+            console.log("RESPAWN via fire button on strategic zone", lockedTargetId);
+            socket.emit('shoot', { id: lockedTargetId, lat: myLat, lon: myLon, placing: false });
+        } else {
+            showFeedback("MORT - Scannez\nune zone stratégique !", "#ff6666");
+        }
+        return;
+    }
 
     // Reload special
     if (lockedTargetId === 0) { handleHit(0); return; }
