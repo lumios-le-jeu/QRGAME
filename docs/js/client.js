@@ -4,7 +4,27 @@ const GAME_SERVER_URL = (location.hostname === "localhost" || location.hostname 
     : "https://fun.qrshotgame.fr";
 
 const socket = io(GAME_SERVER_URL);
-console.log("%c QRSHOT v1.2.5 - AUTO-REGISTER MODE ACTIVE ", "background: red; color: white; font-size: 20px; font-weight: bold;");
+console.log("%c QRSHOT v1.3.0 - AUTO-REGISTER + SESSION RESTORE ", "background: #7c3aed; color: white; font-size: 16px; font-weight: bold;");
+
+// ─── SESSION RESTORE (F5 reconnect) ─────────────────────────────────────────
+(function tryRestoreSession() {
+    const saved = sessionStorage.getItem('qrshot_session');
+    if (!saved) return;
+    try {
+        const s = JSON.parse(saved);
+        if (s.gameCode && s.username) {
+            console.log('[SESSION RESTORE] Reconnecting to', s.gameCode);
+            // Wait for socket to connect before rejoining
+            socket.once('connect', () => {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    enterGame(s.username, s.team || 'auto', s.gameCode, { lat: pos.coords.latitude, lon: pos.coords.longitude });
+                }, () => {
+                    enterGame(s.username, s.team || 'auto', s.gameCode, { lat: 0, lon: 0 });
+                });
+            });
+        }
+    } catch(e) { sessionStorage.removeItem('qrshot_session'); }
+})();
 
 socket.on("connect_error", (err) => {
     console.error("Server Connection Failed:", err);
@@ -238,6 +258,9 @@ function enterGame(username, team, gameCode, coords) {
     activeGameCode = gameCode;
     showScreen('game');
 
+    // Save session for F5 restore
+    sessionStorage.setItem('qrshot_session', JSON.stringify({ username, team, gameCode }));
+
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().then(s => {}).catch(console.error);
     }
@@ -261,8 +284,10 @@ function enterGame(username, team, gameCode, coords) {
             lockBtn.style.transform = "scale(0.9)";
             lockBtn.style.background = 'rgba(255,0,0,0.5)';
             pressTimer = window.setTimeout(() => {
-                if (confirm("QUITTER LA MISSION ?")) location.reload();
-                else {  lockBtn.innerHTML = "🔒"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; }
+                if (confirm("QUITTER LA MISSION ?")) {
+                    sessionStorage.removeItem('qrshot_session');
+                    location.reload();
+                } else { lockBtn.innerHTML = "🔒"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; }
             }, 2000);
         };
         const cancelPress = () => { lockBtn.style.transform = "scale(1)"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; clearTimeout(pressTimer); };
@@ -287,10 +312,79 @@ function enterGame(username, team, gameCode, coords) {
     const codeDisplay = document.getElementById('game-code-display');
     if (codeDisplay) codeDisplay.innerText = `CODE: ${gameCode}`;
     startLocationTracking();
+
+    // Show tutorial on first join
+    const tutKey = 'qrshot_tutorial_seen_v1';
+    if (!localStorage.getItem(tutKey)) {
+        showTutorialOverlay(myGameMode);
+        localStorage.setItem(tutKey, '1');
+    }
 }
 
 // ─── SCOREBOARD ──────────────────────────────────────────────────────────────
 let score1 = 0, score2 = 0;
+
+// ─── TUTORIAL OVERLAY ──────────────────────────────────────────────────────────
+function showTutorialOverlay(mode) {
+    const overlay = document.createElement('div');
+    overlay.id = 'tutorial-overlay';
+    Object.assign(overlay.style, {
+        position: 'fixed', inset: '0', zIndex: '20000',
+        background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(10px)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        color: 'white', fontFamily: 'sans-serif', textAlign: 'center', padding: '20px',
+        userSelect: 'none', touchAction: 'none'
+    });
+
+    const slides = mode === 'paint' ? [
+        { title: "MODE PAINT", text: "Tout le monde commence en ROUGE.", icon: "🎨" },
+        { title: "PREMIER COUP", text: "Le premier joueur qui vous touche définit votre équipe : VERT ou BLEU.", icon: "🎯" },
+        { title: "ÉLIMINATION", text: "Si vous êtes touché par un ennemi, vous êtes éliminé (écran brisé).", icon: "💀" },
+        { title: "SOIN", text: "Un coéquipier peut vous soigner en vous tirant dessus !", icon: "💖" }
+    ] : [
+        { title: "MODE CAPTURE", text: "Capturez des zones stratégiques pour gagner des points.", icon: "🚩" },
+        { title: "ZONES", text: "Visez le QR code d'une zone (200-250) pour la capturer.", icon: "📡" },
+        { title: "RESPAWN", text: "Si vous mourez, scannez une zone de VOTRE équipe pour revivre.", icon: "🔄" },
+        { title: "POINTS", text: "Tenez les zones le plus longtemps possible !", icon: "📈" }
+    ];
+
+    let currentSlide = 0;
+    const updateSlide = () => {
+        const s = slides[currentSlide];
+        overlay.innerHTML = `
+            <div style="font-size: 5rem; margin-bottom: 20px; filter: drop-shadow(0 0 10px #67e8f9)">${s.icon}</div>
+            <h2 style="font-size: 2.2rem; font-weight: 900; color: #67e8f9; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px;">${s.title}</h2>
+            <p style="font-size: 1.3rem; line-height: 1.6; max-width: 300px; margin-bottom: 40px; color: #cbd5e1;">${s.text}</p>
+            <div style="display: flex; gap: 12px; margin-bottom: 50px;">
+                ${slides.map((_, i) => `<div style="width:12px; height:12px; border-radius:50%; background:${i===currentSlide?'#67e8f9':'#334155'}; transition: all 0.3s;"></div>`).join('')}
+            </div>
+            <div style="color: #64748b; font-size: 0.9rem; font-weight: bold; letter-spacing: 1px; animation: bounce 2s infinite;">TAP ou SWIPE POUR SUIVRE</div>
+        `;
+    };
+
+    updateSlide();
+
+    const next = () => {
+        currentSlide++;
+        if (currentSlide >= slides.length) {
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.5s ease-out';
+            setTimeout(() => overlay.remove(), 500);
+        } else {
+            updateSlide();
+        }
+    };
+
+    overlay.addEventListener('click', next);
+    
+    let touchstartX = 0;
+    overlay.addEventListener('touchstart', e => touchstartX = e.changedTouches[0].screenX, {passive: true});
+    overlay.addEventListener('touchend', e => {
+        if (touchstartX - e.changedTouches[0].screenX > 50) next();
+    }, {passive: true});
+
+    document.body.appendChild(overlay);
+}
 
 function updateScoreBoard(data) {
     const row1  = document.getElementById('score-row-1');
@@ -361,11 +455,44 @@ let detector = null;
 let processingCanvas = null;
 let processingCtx    = null;
 
+async function getBestRearCamera() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        // Try to pick the highest resolution back camera
+        let bestDevice = null;
+        let bestScore = -1;
+        for (const device of videoDevices) {
+            const label = device.label.toLowerCase();
+            // Skip front cameras
+            if (label.includes('front') || label.includes('selfie') || label.includes('user') || label.includes('facetime')) continue;
+            // Get a short stream to read capabilities
+            try {
+                const testStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: device.deviceId } } });
+                const testTrack = testStream.getVideoTracks()[0];
+                const caps = testTrack.getCapabilities ? testTrack.getCapabilities() : {};
+                testStream.getTracks().forEach(t => t.stop());
+                const maxW = caps.width ? caps.width.max : 0;
+                const maxH = caps.height ? caps.height.max : 0;
+                const score = maxW * maxH;
+                if (score > bestScore) { bestScore = score; bestDevice = device; }
+            } catch(e) { /* skip unavailable */ }
+        }
+        return bestDevice ? bestDevice.deviceId : null;
+    } catch(e) {
+        console.warn('Camera enumeration failed', e);
+        return null;
+    }
+}
+
 async function startCamera() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
+        const bestDeviceId = await getBestRearCamera();
+        const constraints = bestDeviceId
+            ? { video: { deviceId: { exact: bestDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } } }
+            : { video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         video.setAttribute("playsinline", true);
         video.play();
@@ -374,6 +501,7 @@ async function startCamera() {
         const track = stream.getVideoTracks()[0];
         const capabilities = track.getCapabilities ? track.getCapabilities() : {};
         const settings     = track.getSettings ? track.getSettings() : {};
+        console.log('[CAMERA] Using:', track.label, settings);
 
         try { await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch(e) {}
 
