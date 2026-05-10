@@ -279,23 +279,12 @@ function enterGame(username, team, gameCode, coords) {
         lockBtn.id = 'screen-lock-btn';
         lockBtn.innerHTML = "🔒";
         document.body.appendChild(lockBtn);
-        let pressTimer;
-        const startPress = () => {
-            lockBtn.style.transform = "scale(0.9)";
-            lockBtn.style.background = 'rgba(255,0,0,0.5)';
-            pressTimer = window.setTimeout(() => {
-                if (confirm("QUITTER LA MISSION ?")) {
-                    sessionStorage.removeItem('qrshot_session');
-                    location.reload();
-                } else { lockBtn.innerHTML = "🔒"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; }
-            }, 2000);
-        };
-        const cancelPress = () => { lockBtn.style.transform = "scale(1)"; lockBtn.style.background = 'rgba(0,0,0,0.5)'; clearTimeout(pressTimer); };
-        lockBtn.addEventListener('mousedown', startPress);
-        lockBtn.addEventListener('touchstart', startPress);
-        lockBtn.addEventListener('mouseup', cancelPress);
-        lockBtn.addEventListener('mouseleave', cancelPress);
-        lockBtn.addEventListener('touchend', cancelPress);
+        lockBtn.addEventListener('click', () => {
+            if (confirm("QUITTER LA MISSION ET RETOURNER AU MENU ?")) {
+                sessionStorage.removeItem('qrshot_session');
+                location.reload();
+            }
+        });
     }
     Object.assign(lockBtn.style, {
         display:'flex', position:'fixed', top:'10px', left:'10px', right:'auto',
@@ -843,6 +832,7 @@ socket.on('playerList', (players) => {
 });
 
 socket.on('gameOver', (data) => {
+    sessionStorage.removeItem('qrshot_session'); // Prevent auto-rejoin on F5
     const me = data.players[socket.id];
     const overlay = document.createElement('div');
     overlay.className = 'game-over-screen';
@@ -878,7 +868,7 @@ socket.on('gameOver', (data) => {
             </div>
             <div style="margin-top:20px;font-size:1rem;color:#aaa">${scoresHTML}</div>
         </div>
-        <button class="btn primary" style="margin-top:30px" onclick="location.reload()">RETOUR BASE</button>
+        <button class="btn primary" style="margin-top:30px" onclick="sessionStorage.removeItem('qrshot_session'); location.reload()">RETOUR BASE</button>
     `;
     document.body.appendChild(overlay);
 });

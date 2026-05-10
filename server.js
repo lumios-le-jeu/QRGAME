@@ -158,51 +158,66 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // ── ASSIGN TEAM & MARKER ID ──────────────────────────────────────────
-        let assignedTeam = data.team;
-        let markerId = -1; // Will be assigned when player scans their own QR
-
-        if (data.team === 'spectator' || data.username === 'Admin') {
-            assignedTeam = 'spectator';
-            markerId = 256;
-        } else if (game.gameMode === 'paint') {
-            assignedTeam = 'red'; // Everyone starts RED — ID assigned on self-scan
-        } else {
-            // CTF: auto-balance team, ID assigned on self-scan
-            if (!assignedTeam || assignedTeam === 'auto' || assignedTeam === 'null') {
-                const players = Object.values(game.players);
-                const redCount  = players.filter(p => p.team === 'red').length;
-                const blueCount = players.filter(p => p.team === 'blue').length;
-                if (redCount < blueCount)       assignedTeam = 'red';
-                else if (blueCount < redCount)  assignedTeam = 'blue';
-                else                            assignedTeam = Math.random() < 0.5 ? 'red' : 'blue';
-                console.log(`[AUTO-BALANCE CTF] R(${redCount}) vs B(${blueCount}) -> ${assignedTeam}`);
+        game.disconnectedPlayers = game.disconnectedPlayers || {};
+        if (game.disconnectedPlayers[data.username]) {
+            // Restore session
+            const p = game.disconnectedPlayers[data.username];
+            p.id = socket.id;
+            game.players[socket.id] = p;
+            delete game.disconnectedPlayers[data.username];
+            
+            socket.emit('assignedId', { id: p.markerId, team: p.team, gameMode: game.gameMode, needsRegistration: p.markerId === -1 });
+            if (p.markerId !== -1) {
+                socket.emit('teamChanged', { newTeam: p.team, newMarkerId: p.markerId });
             }
+            console.log(`${data.username} reconnected to game ${actualGameCode} (Team ${p.team}, ID ${p.markerId})`);
+        } else {
+            // ── ASSIGN TEAM & MARKER ID ──────────────────────────────────────────
+            let assignedTeam = data.team;
+            let markerId = -1; // Will be assigned when player scans their own QR
+
+            if (data.team === 'spectator' || data.username === 'Admin') {
+                assignedTeam = 'spectator';
+                markerId = 256;
+            } else if (game.gameMode === 'paint') {
+                assignedTeam = 'red'; // Everyone starts RED — ID assigned on self-scan
+            } else {
+                // CTF: auto-balance team, ID assigned on self-scan
+                if (!assignedTeam || assignedTeam === 'auto' || assignedTeam === 'null') {
+                    const players = Object.values(game.players);
+                    const redCount  = players.filter(p => p.team === 'red').length;
+                    const blueCount = players.filter(p => p.team === 'blue').length;
+                    if (redCount < blueCount)       assignedTeam = 'red';
+                    else if (blueCount < redCount)  assignedTeam = 'blue';
+                    else                            assignedTeam = Math.random() < 0.5 ? 'red' : 'blue';
+                    console.log(`[AUTO-BALANCE CTF] R(${redCount}) vs B(${blueCount}) -> ${assignedTeam}`);
+                }
+            }
+
+            game.players[socket.id] = {
+                id: socket.id,
+                username: data.username,
+                team: assignedTeam,
+                markerId, // -1 until self-scan
+                score: 0,
+                ammo: 6,
+                lives: 3,
+                kills: 0,
+                deaths: 0,
+                captures: 0,
+                lat: data.lat || 0,
+                lon: data.lon || 0,
+                lastHitTime: 0,
+                // ── State flags ──
+                alive: true,
+                pendingRespawn: false,
+                colorAssigned: (game.gameMode === 'paint') ? false : true
+            };
+
+            // Tell client to wait for self-scan
+            socket.emit('assignedId', { id: -1, team: assignedTeam, gameMode: game.gameMode, needsRegistration: true });
+            console.log(`${data.username} joined game ${actualGameCode} (Team ${assignedTeam}) - Waiting for self-scan`);
         }
-
-        game.players[socket.id] = {
-            id: socket.id,
-            username: data.username,
-            team: assignedTeam,
-            markerId, // -1 until self-scan
-            score: 0,
-            ammo: 6,
-            lives: 3,
-            kills: 0,
-            deaths: 0,
-            captures: 0,
-            lat: data.lat || 0,
-            lon: data.lon || 0,
-            lastHitTime: 0,
-            // ── State flags ──
-            alive: true,
-            pendingRespawn: false,
-            colorAssigned: (game.gameMode === 'paint') ? false : true
-        };
-
-        // Tell client to wait for self-scan
-        socket.emit('assignedId', { id: -1, team: assignedTeam, gameMode: game.gameMode, needsRegistration: true });
-        console.log(`${data.username} joined game ${actualGameCode} (Team ${assignedTeam}) - Waiting for self-scan`);
 
         io.to(actualGameCode).emit('playerList', Object.values(game.players));
         io.to(actualGameCode).emit('gameState', buildGameState(game));
@@ -239,8 +254,13 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         const gameCode = socketMap[socket.id];
         if (gameCode && games[gameCode]) {
-            delete games[gameCode].players[socket.id];
-            io.to(gameCode).emit('playerList', Object.values(games[gameCode].players));
+            const player = games[gameCode].players[socket.id];
+            if (player) {
+                games[gameCode].disconnectedPlayers = games[gameCode].disconnectedPlayers || {};
+                games[gameCode].disconnectedPlayers[player.username] = player;
+                delete games[gameCode].players[socket.id];
+                io.to(gameCode).emit('playerList', Object.values(games[gameCode].players));
+            }
         }
         delete socketMap[socket.id];
         console.log('User disconnected:', socket.id);
