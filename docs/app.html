@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QRSHOT - Battle Arena</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <link
@@ -89,9 +91,76 @@
 
 <body class="bg-slate-900 text-slate-200 antialiased overflow-hidden selection:bg-blue-500 selection:text-white">
 
+    <!-- PAGE: AUTH (Login / Signup) -->
+    <section id="page-auth" class="screen active p-4">
+        <div class="glass-panel-modern max-w-sm w-full p-8 rounded-2xl space-y-6 animate-fade-in-up">
+
+            <!-- Logo -->
+            <div class="text-center space-y-1">
+                <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 font-mono tracking-wider">QRSHOT</h1>
+                <p class="text-slate-500 text-xs tracking-widest uppercase">Tactical AR Battle · Compte Joueur</p>
+            </div>
+
+            <!-- LOGIN FORM -->
+            <div id="auth-form-login" class="space-y-4">
+                <h2 class="text-lg font-bold text-white text-center">Connexion</h2>
+                <input type="email" id="auth-email" placeholder="Email" autocomplete="email"
+                    class="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-600">
+                <input type="password" id="auth-password" placeholder="Mot de passe" autocomplete="current-password"
+                    class="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-600">
+                <p id="auth-error" class="text-red-400 text-sm text-center min-h-[20px]"></p>
+                <button id="btn-auth-login"
+                    class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg shadow-blue-900/40 transition-all transform hover:scale-105 tracking-wider">
+                    CONNEXION
+                </button>
+                <button id="btn-show-signup" class="w-full text-sm text-slate-500 hover:text-cyan-400 transition-colors pt-1">
+                    Pas encore de compte ? <span class="text-cyan-400 font-bold">Créer un compte</span>
+                </button>
+            </div>
+
+            <!-- SIGNUP FORM -->
+            <div id="auth-form-signup" class="space-y-3 hidden">
+                <h2 class="text-lg font-bold text-white text-center">Créer mon compte</h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="text" id="signup-prenom" placeholder="Prénom"
+                        class="bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-600 text-sm">
+                    <input type="text" id="signup-nom" placeholder="Nom"
+                        class="bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-600 text-sm">
+                </div>
+                <input type="text" id="signup-pseudo" placeholder="Pseudo en jeu (ex: Viper66)" maxlength="20"
+                    class="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-cyan-500 outline-none placeholder-slate-600">
+                <input type="email" id="signup-email" placeholder="Email" autocomplete="email"
+                    class="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-600">
+                <input type="password" id="signup-password" placeholder="Mot de passe (min 6 car.)" autocomplete="new-password"
+                    class="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-600">
+                <p id="signup-error" class="text-red-400 text-sm text-center min-h-[20px]"></p>
+                <button id="btn-auth-signup"
+                    class="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black rounded-xl shadow-lg transition-all transform hover:scale-105 tracking-wider">
+                    CRÉER MON COMPTE
+                </button>
+                <button id="btn-show-login" class="w-full text-sm text-slate-500 hover:text-blue-400 transition-colors">
+                    Déjà un compte ? <span class="text-blue-400 font-bold">Se connecter</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
     <!-- PAGE: ACCUEIL -->
-    <section id="page-home" class="screen active p-4">
+    <section id="page-home" class="screen p-4">
         <div class="glass-panel-modern max-w-md w-full p-8 rounded-2xl text-center space-y-8 animate-fade-in-up">
+
+            <!-- User badge + logout -->
+            <div class="flex justify-between items-center">
+                <span id="user-badge" class="text-sm text-cyan-400 font-bold truncate max-w-[200px]">👤 ...</span>
+                <div class="flex gap-2">
+                    <button id="btn-history" title="Historique" class="text-slate-400 hover:text-cyan-400 transition-colors text-sm px-2 py-1 rounded-lg bg-slate-800/60 hover:bg-slate-700 border border-slate-700">
+                        <i class="fa-solid fa-chart-line mr-1"></i>Stats
+                    </button>
+                    <button id="btn-logout" title="Déconnexion" class="text-slate-400 hover:text-red-400 transition-colors text-sm px-2 py-1 rounded-lg bg-slate-800/60 hover:bg-slate-700 border border-slate-700">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
 
             <div class="space-y-2">
                 <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 font-mono tracking-wider glitch-text"
@@ -500,8 +569,24 @@
         </div>
     </section>
 
+    <!-- MODAL: HISTORY -->
+    <div id="modal-history" class="hidden fixed inset-0 z-[9999] flex items-end justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="glass-panel-modern w-full max-w-md rounded-2xl p-6 space-y-4 animate-fade-in-up max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-black text-white font-mono tracking-wider"><i class="fa-solid fa-chart-line text-cyan-400 mr-2"></i>MES STATS</h2>
+                <button id="btn-close-history" class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="history-list" class="flex-1 overflow-y-auto">
+                <div class="text-slate-500 text-sm text-center py-8">Chargement...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Keep client logic -->
-    <script src="js/client.js?v=125"></script>
+    <script src="js/auth.js?v=1"></script>
+    <script src="js/client.js?v=126"></script>
 </body>
 
 </html>

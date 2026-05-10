@@ -54,6 +54,7 @@ let globalPlayers   = [];
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 const screens = {
+    auth:   document.getElementById('page-auth'),
     home:   document.getElementById('page-home'),
     join:   document.getElementById('page-join'),
     create: document.getElementById('page-create'),
@@ -199,7 +200,11 @@ document.getElementById('btn-confirm-join').addEventListener('click', async (e) 
     await requestSensors();
     startLocationTracking();
     const code   = document.getElementById('join-code').value.toUpperCase();
-    const pseudo = document.getElementById('join-pseudo').value || 'Soldier';
+    // Use profile pseudo if logged in, otherwise fallback to input
+    const pseudoInput = document.getElementById('join-pseudo').value || 'Soldier';
+    const pseudo = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.pseudo)
+        ? currentProfile.pseudo
+        : pseudoInput;
     const team   = document.getElementById('join-team').value;
     if (code.length !== 4) { alert("Code invalide (4 caractères)"); btn.disabled = false; btn.innerText = "GO"; return; }
     try {
@@ -833,7 +838,7 @@ socket.on('playerList', (players) => {
 
 socket.on('gameOver', (data) => {
     sessionStorage.removeItem('qrshot_session'); // Prevent auto-rejoin on F5
-    const me = data.players[socket.id];
+    const me = data.players ? data.players[socket.id] : null;
     const overlay = document.createElement('div');
     overlay.className = 'game-over-screen';
 
@@ -856,6 +861,32 @@ socket.on('gameOver', (data) => {
         ? `VERT: ${fs.green ?? 0} pts &nbsp;|&nbsp; BLEU: ${fs.blue ?? 0} pts`
         : `ROUGE: ${fs.red ?? 0} pts &nbsp;|&nbsp; BLEU: ${fs.blue ?? 0} pts`;
 
+    // ─── Compute player rank in game ─────────────────────────────────────────
+    let myRank = null;
+    if (data.players && me) {
+        const allPlayers = Object.values(data.players)
+            .filter(p => p.team !== 'spectator')
+            .sort((a, b) => (b.score || 0) - (a.score || 0));
+        myRank = allPlayers.findIndex(p => p.id === socket.id) + 1;
+    }
+
+    // ─── Save to Supabase if logged in ───────────────────────────────────────
+    if (typeof saveGameSession === 'function' && me) {
+        const isWinner = me.team === data.winner;
+        saveGameSession({
+            gameCode:  activeGameCode || 'XXXX',
+            gameName:  document.getElementById('game-code-display')?.innerText?.replace('CODE: ', '').trim() || 'Mission',
+            gameMode:  mode,
+            team:      me.team || myTeam,
+            score:     me.score || 0,
+            kills:     me.kills || 0,
+            deaths:    me.deaths || 0,
+            captures:  me.captures || 0,
+            rank:      myRank,
+            winner:    isWinner
+        });
+    }
+
     overlay.innerHTML = `
         <div class="winner-title" style="color:${color}">${winnerText}</div>
         <div class="stats-container">
@@ -865,6 +896,7 @@ socket.on('gameOver', (data) => {
                 <div class="stat-item">ÉLIMINATIONS <span class="stat-value">${me ? me.kills : 0}</span></div>
                 <div class="stat-item">MORTS <span class="stat-value">${me ? me.deaths : 0}</span></div>
                 <div class="stat-item">ZONES <span class="stat-value">${me ? me.captures : 0}</span></div>
+                ${myRank ? `<div class="stat-item">CLASSEMENT <span class="stat-value">#${myRank}</span></div>` : ''}
             </div>
             <div style="margin-top:20px;font-size:1rem;color:#aaa">${scoresHTML}</div>
         </div>
