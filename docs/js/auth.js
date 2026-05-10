@@ -1,18 +1,19 @@
 // ─── SUPABASE AUTH CLIENT ────────────────────────────────────────────────────
 // Uses the Supabase UMD bundle loaded in HTML
+// NOTE: client named 'db' to avoid conflict with global 'supabase' object from CDN
 
-const SUPABASE_URL  = 'https://aidrgxuuysvyaxxsixws.supabase.co';
-const SUPABASE_KEY  = 'sb_publishable_5ijfCot1AUgPJxhAwOOatA_boLPcYmo';
+const SUPABASE_URL = 'https://aidrgxuuysvyaxxsixws.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_5ijfCot1AUgPJxhAwOOatA_boLPcYmo';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
-let currentUser   = null;
+let currentUser    = null;
 let currentProfile = null;
 
 // ─── INIT: Check existing session on load ────────────────────────────────────
 async function initAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await db.auth.getSession();
     if (session) {
         currentUser = session.user;
         await loadProfile(currentUser.id);
@@ -22,7 +23,7 @@ async function initAuth() {
     }
 
     // Listen for auth state changes (login/logout)
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    db.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
             currentUser = session.user;
             await loadProfile(currentUser.id);
@@ -37,7 +38,7 @@ async function initAuth() {
 
 // ─── LOAD PROFILE ────────────────────────────────────────────────────────────
 async function loadProfile(userId) {
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from('profiles')
         .select('*')
         .eq('id', userId)
@@ -45,10 +46,8 @@ async function loadProfile(userId) {
 
     if (!error && data) {
         currentProfile = data;
-        // Pre-fill join-pseudo if on join page
         const pseudoInput = document.getElementById('join-pseudo');
         if (pseudoInput && data.pseudo) pseudoInput.value = data.pseudo;
-        // Update header badge
         updateUserBadge(data);
     }
     return data;
@@ -56,11 +55,11 @@ async function loadProfile(userId) {
 
 // ─── SIGN UP ─────────────────────────────────────────────────────────────────
 async function signUp(email, password, nom, prenom, pseudo) {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await db.auth.signUp({ email, password });
     if (error) throw error;
 
     // Create profile row
-    const { error: profileError } = await supabase.from('profiles').insert({
+    const { error: profileError } = await db.from('profiles').insert({
         id:     data.user.id,
         email:  email,
         nom:    nom,
@@ -74,22 +73,22 @@ async function signUp(email, password, nom, prenom, pseudo) {
 
 // ─── SIGN IN ─────────────────────────────────────────────────────────────────
 async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
 }
 
 // ─── SIGN OUT ────────────────────────────────────────────────────────────────
 async function signOut() {
-    await supabase.auth.signOut();
+    await db.auth.signOut();
 }
 
-// ─── SAVE GAME SESSION (called from client.js on gameOver) ───────────────────
+// ─── SAVE GAME SESSION ───────────────────────────────────────────────────────
 async function saveGameSession(gameData) {
-    if (!currentUser || !currentProfile) return; // not logged in
+    if (!currentUser || !currentProfile) return;
     const { gameCode, gameName, gameMode, team, score, kills, deaths, captures, rank, winner } = gameData;
 
-    const { error } = await supabase.from('game_sessions').insert({
+    const { error } = await db.from('game_sessions').insert({
         player_id: currentUser.id,
         pseudo:    currentProfile.pseudo,
         game_code: gameCode,
@@ -110,7 +109,7 @@ async function saveGameSession(gameData) {
 // ─── LOAD HISTORY ────────────────────────────────────────────────────────────
 async function loadHistory() {
     if (!currentUser) return [];
-    const { data, error } = await supabase
+    const { data, error } = await db
         .from('game_sessions')
         .select('*')
         .eq('player_id', currentUser.id)
@@ -123,12 +122,11 @@ async function loadHistory() {
 
 // ─── UI: Show / Hide auth screens ────────────────────────────────────────────
 function showAuthenticatedUI() {
-    const authScreen  = document.getElementById('page-auth');
-    const homeScreen  = document.getElementById('page-home');
+    const authScreen = document.getElementById('page-auth');
+    const homeScreen = document.getElementById('page-home');
     if (authScreen) { authScreen.classList.add('hidden'); authScreen.classList.remove('active'); }
-    if (homeScreen)  { homeScreen.classList.remove('hidden'); homeScreen.classList.add('active'); }
+    if (homeScreen) { homeScreen.classList.remove('hidden'); homeScreen.classList.add('active'); }
 
-    // Pre-fill pseudo on join page
     const pseudoInput = document.getElementById('join-pseudo');
     if (pseudoInput && currentProfile) pseudoInput.value = currentProfile.pseudo;
 
@@ -149,7 +147,7 @@ function updateUserBadge(profile) {
     }
 }
 
-// ─── HISTORY MODAL RENDERER ──────────────────────────────────────────────────
+// ─── HISTORY MODAL ────────────────────────────────────────────────────────────
 async function showHistoryModal() {
     const modal = document.getElementById('modal-history');
     if (!modal) return;
@@ -164,13 +162,12 @@ async function showHistoryModal() {
         return;
     }
 
-    const totalGames  = sessions.length;
-    const totalScore  = sessions.reduce((s, g) => s + (g.score || 0), 0);
-    const totalKills  = sessions.reduce((s, g) => s + (g.kills || 0), 0);
-    const wins        = sessions.filter(g => g.winner).length;
+    const totalGames = sessions.length;
+    const totalScore = sessions.reduce((s, g) => s + (g.score || 0), 0);
+    const totalKills = sessions.reduce((s, g) => s + (g.kills || 0), 0);
+    const wins       = sessions.filter(g => g.winner).length;
 
     container.innerHTML = `
-        <!-- Stats globales -->
         <div class="grid grid-cols-4 gap-2 mb-5 text-center">
             <div class="bg-slate-800/60 rounded-lg p-2">
                 <div class="text-lg font-black text-cyan-400">${totalGames}</div>
@@ -189,13 +186,12 @@ async function showHistoryModal() {
                 <div class="text-[10px] text-slate-500 uppercase">Kills</div>
             </div>
         </div>
-        <!-- Liste des parties -->
         <div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
             ${sessions.map(g => {
-                const date   = new Date(g.played_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
-                const modeIcon = g.game_mode === 'paint' ? '🎨' : '🚩';
+                const date      = new Date(g.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+                const modeIcon  = g.game_mode === 'paint' ? '🎨' : '🚩';
                 const teamColor = g.team === 'red' ? 'text-red-400' : g.team === 'blue' ? 'text-blue-400' : g.team === 'green' ? 'text-green-400' : 'text-slate-400';
-                const winBadge = g.winner ? '<span class="text-xs bg-green-500/20 text-green-400 border border-green-500/40 px-2 py-0.5 rounded-full font-bold">WIN</span>' : '';
+                const winBadge  = g.winner ? '<span class="text-xs bg-green-500/20 text-green-400 border border-green-500/40 px-2 py-0.5 rounded-full font-bold">WIN</span>' : '';
                 const rankBadge = g.rank ? `<span class="text-xs text-slate-400">#${g.rank}</span>` : '';
                 return `
                 <div class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 flex justify-between items-center gap-2">
@@ -209,7 +205,7 @@ async function showHistoryModal() {
                     </div>
                     <div class="text-right shrink-0">
                         <div class="text-lg font-black text-cyan-400">${g.score || 0} pts</div>
-                        <div class="text-[10px] text-slate-500">${g.kills||0}K · ${g.deaths||0}D ${rankBadge}</div>
+                        <div class="text-[10px] text-slate-500">${g.kills || 0}K · ${g.deaths || 0}D ${rankBadge}</div>
                     </div>
                 </div>`;
             }).join('')}
@@ -222,16 +218,8 @@ function hideHistoryModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-// ─── INIT ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    initAuth();
-    setupAuthForms();
-    setupHistoryBtn();
-});
-
-// ─── FORM LOGIC ──────────────────────────────────────────────────────────────
+// ─── FORM LOGIC ───────────────────────────────────────────────────────────────
 function setupAuthForms() {
-    // Toggle between login and signup
     const showSignup = document.getElementById('btn-show-signup');
     const showLogin  = document.getElementById('btn-show-login');
     const formLogin  = document.getElementById('auth-form-login');
@@ -246,31 +234,38 @@ function setupAuthForms() {
         formLogin.classList.remove('hidden');
     });
 
-    // Login submit
+    // ── LOGIN ───────────────────────────────────────────────────────────────
     document.getElementById('btn-auth-login')?.addEventListener('click', async () => {
         const btn      = document.getElementById('btn-auth-login');
         const email    = document.getElementById('auth-email').value.trim();
         const password = document.getElementById('auth-password').value;
         const errEl    = document.getElementById('auth-error');
+
+        if (!email || !password) { errEl.textContent = 'Remplissez email et mot de passe.'; return; }
+
         errEl.textContent = '';
         btn.disabled = true; btn.textContent = 'Connexion...';
         try {
             await signIn(email, password);
-        } catch(e) {
-            errEl.textContent = 'Email ou mot de passe incorrect.';
+            // showAuthenticatedUI() is triggered via onAuthStateChange
+        } catch (e) {
+            console.error('[AUTH] Login error:', e);
+            errEl.textContent = e.message || 'Email ou mot de passe incorrect.';
         }
         btn.disabled = false; btn.textContent = 'CONNEXION';
     });
 
-    // Signup submit
+    // ── SIGNUP ──────────────────────────────────────────────────────────────
     document.getElementById('btn-auth-signup')?.addEventListener('click', async () => {
-        const btn     = document.getElementById('btn-auth-signup');
-        const email   = document.getElementById('signup-email').value.trim();
-        const pass    = document.getElementById('signup-password').value;
-        const nom     = document.getElementById('signup-nom').value.trim();
-        const prenom  = document.getElementById('signup-prenom').value.trim();
-        const pseudo  = document.getElementById('signup-pseudo').value.trim();
-        const errEl   = document.getElementById('signup-error');
+        const btn    = document.getElementById('btn-auth-signup');
+        const email  = document.getElementById('signup-email').value.trim();
+        const pass   = document.getElementById('signup-password').value;
+        const nom    = document.getElementById('signup-nom').value.trim();
+        const prenom = document.getElementById('signup-prenom').value.trim();
+        const pseudo = document.getElementById('signup-pseudo').value.trim();
+        const errEl  = document.getElementById('signup-error');
+
+        errEl.style.color = '#f87171';
         errEl.textContent = '';
 
         if (!email || !pass || !nom || !prenom || !pseudo) {
@@ -283,17 +278,24 @@ function setupAuthForms() {
         btn.disabled = true; btn.textContent = 'Création...';
         try {
             await signUp(email, pass, nom, prenom, pseudo);
-            // Show confirmation message
             errEl.style.color = '#4ade80';
-            errEl.textContent = '✅ Compte créé ! Vérifiez votre email pour confirmer.';
-        } catch(e) {
+            errEl.textContent = '✅ Compte créé ! Connectez-vous maintenant.';
+            // Switch to login form
+            setTimeout(() => {
+                formSignup.classList.add('hidden');
+                formLogin.classList.remove('hidden');
+                document.getElementById('auth-email').value = email;
+                document.getElementById('signup-error').textContent = '';
+            }, 1500);
+        } catch (e) {
+            console.error('[AUTH] Signup error:', e);
             errEl.style.color = '#f87171';
             errEl.textContent = e.message || 'Erreur lors de la création du compte.';
         }
-        btn.disabled = false; btn.textContent = "CRÉER MON COMPTE";
+        btn.disabled = false; btn.textContent = 'CRÉER MON COMPTE';
     });
 
-    // Logout button
+    // ── LOGOUT ──────────────────────────────────────────────────────────────
     document.getElementById('btn-logout')?.addEventListener('click', async () => {
         await signOut();
     });
@@ -303,3 +305,19 @@ function setupHistoryBtn() {
     document.getElementById('btn-history')?.addEventListener('click', showHistoryModal);
     document.getElementById('btn-close-history')?.addEventListener('click', hideHistoryModal);
 }
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+// Guard against DOMContentLoaded already having fired (script loaded at end of body)
+function onDOMReady(fn) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fn);
+    } else {
+        fn();
+    }
+}
+
+onDOMReady(() => {
+    initAuth();
+    setupAuthForms();
+    setupHistoryBtn();
+});
