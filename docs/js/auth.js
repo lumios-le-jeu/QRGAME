@@ -55,19 +55,14 @@ async function loadProfile(userId) {
 
 // ─── SIGN UP ─────────────────────────────────────────────────────────────────
 async function signUp(email, password, nom, prenom, pseudo) {
-    const { data, error } = await db.auth.signUp({ email, password });
-    if (error) throw error;
-
-    // Create profile row
-    const { error: profileError } = await db.from('profiles').insert({
-        id:     data.user.id,
-        email:  email,
-        nom:    nom,
-        prenom: prenom,
-        pseudo: pseudo
+    const { data, error } = await db.auth.signUp({ 
+        email, 
+        password,
+        options: {
+            data: { nom, prenom, pseudo }
+        }
     });
-    if (profileError) throw profileError;
-
+    if (error) throw error;
     return data;
 }
 
